@@ -166,7 +166,7 @@ export default function ConcertTracker() {
           className="text-xl font-bold tracking-wider text-neon-cyan font-mono"
           style={{ textShadow: "0 0 20px oklch(0.72 0.21 195 / 0.5)" }}
         >
-          SHØW LOG
+          SONA
         </h1>
         <div className="flex gap-2">
           {years.map((year) => (
@@ -192,7 +192,7 @@ export default function ConcertTracker() {
             className="text-2xl font-bold tracking-wider text-neon-cyan font-mono"
             style={{ textShadow: "0 0 20px oklch(0.72 0.21 195 / 0.5)" }}
           >
-            SHØW LOG
+            SONA
           </h1>
         </div>
 

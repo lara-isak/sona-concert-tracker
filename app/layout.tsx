@@ -12,7 +12,7 @@ const roboto = Roboto({
 })
 
 export const metadata: Metadata = {
-  title: "SHØW LOG - Concert Tracker",
+  title: "SONA - Concert Tracker",
   description: "Cyberpunk-themed concert tracking dashboard",
 }
 
