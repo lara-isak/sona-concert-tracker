@@ -1,107 +1,47 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Search, MapPin, Ticket, FileText } from "lucide-react"
-
-type Concert = {
-  show: string
-  date: string
-  dotw: string
-  city: string
-  venue: string
-  ticket: "YES" | "NO"
-  ticketVendor: string
-  ticketLocation: string
-  attended: "YES" | "NO"
-  note?: string
-}
-
-const concerts: Concert[] = [
-  {
-    show: "Classics Meet Chinese Rock",
-    date: "2025-01-22",
-    dotw: "Wednesday",
-    city: "Berlin",
-    venue: "Berlin Philharmonie",
-    ticket: "YES",
-    ticketVendor: "Eventim",
-    ticketLocation: "Apple Wallet",
-    attended: "NO",
-    note: "Front row seats!",
-  },
-  {
-    show: "Electronic Dreams Festival",
-    date: "2025-02-14",
-    dotw: "Friday",
-    city: "Berlin",
-    venue: "Berghain",
-    ticket: "YES",
-    ticketVendor: "TicketSwap",
-    ticketLocation: "Files",
-    attended: "NO",
-  },
-  {
-    show: "Jazz Noir Sessions",
-    date: "2024-12-10",
-    dotw: "Tuesday",
-    city: "Hamburg",
-    venue: "Elbphilharmonie",
-    ticket: "YES",
-    ticketVendor: "Venue Website",
-    ticketLocation: "In App",
-    attended: "YES",
-    note: "Amazing acoustics",
-  },
-  {
-    show: "Techno Underground",
-    date: "2025-03-05",
-    dotw: "Wednesday",
-    city: "Berlin",
-    venue: "Tresor",
-    ticket: "NO",
-    ticketVendor: "Ticketmaster",
-    ticketLocation: "N/A",
-    attended: "NO",
-  },
-  {
-    show: "Synthwave Nights",
-    date: "2024-11-20",
-    dotw: "Monday",
-    city: "Munich",
-    venue: "Olympiahalle",
-    ticket: "YES",
-    ticketVendor: "Eventim",
-    ticketLocation: "Apple Wallet",
-    attended: "YES",
-  },
-  {
-    show: "Neo Tokyo Orchestra",
-    date: "2025-04-18",
-    dotw: "Friday",
-    city: "Frankfurt",
-    venue: "Alte Oper",
-    ticket: "YES",
-    ticketVendor: "Ticketmaster",
-    ticketLocation: "Files",
-    attended: "NO",
-    note: "Limited edition tour",
-  },
-]
+import { Search, MapPin, Ticket, FileText, Plus, Upload, X } from "lucide-react"
+import { getConcerts, saveConcerts, parseGoogleSheetsCSV, type Concert } from "@/lib/concerts"
 
 export default function ConcertTracker() {
+  const [concerts, setConcerts] = useState<Concert[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCity, setSelectedCity] = useState("All")
   const [selectedVendor, setSelectedVendor] = useState("All")
   const [attendedFilter, setAttendedFilter] = useState<"All" | "Attended" | "Not Attended">("All")
   const [selectedYear, setSelectedYear] = useState("2025")
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [showImportForm, setShowImportForm] = useState(false)
+  const [importText, setImportText] = useState("")
 
-  const cities = useMemo(() => ["All", ...Array.from(new Set(concerts.map((c) => c.city)))], [])
-  const vendors = useMemo(() => ["All", ...Array.from(new Set(concerts.map((c) => c.ticketVendor)))], [])
-  const years = ["2024", "2025", "2026"]
+  // Load concerts from localStorage on mount
+  useEffect(() => {
+    const stored = getConcerts()
+    setConcerts(stored)
+  }, [])
+
+  // Update selected year based on available data
+  useEffect(() => {
+    if (concerts.length > 0) {
+      const years = new Set(concerts.map((c) => c.date.substring(0, 4)))
+      const sortedYears = Array.from(years).sort()
+      if (sortedYears.length > 0 && !sortedYears.includes(selectedYear)) {
+        setSelectedYear(sortedYears[sortedYears.length - 1])
+      }
+    }
+  }, [concerts, selectedYear])
+
+  const cities = useMemo(() => ["All", ...Array.from(new Set(concerts.map((c) => c.city)))], [concerts])
+  const vendors = useMemo(() => ["All", ...Array.from(new Set(concerts.map((c) => c.ticketVendor)))], [concerts])
+  const years = useMemo(() => {
+    const yearSet = new Set(concerts.map((c) => c.date.substring(0, 4)))
+    return Array.from(yearSet).sort()
+  }, [concerts])
 
   const filteredConcerts = useMemo(() => {
     return concerts.filter((concert) => {
@@ -120,7 +60,7 @@ export default function ConcertTracker() {
 
       return matchesSearch && matchesCity && matchesVendor && matchesAttended && matchesYear
     })
-  }, [searchQuery, selectedCity, selectedVendor, attendedFilter, selectedYear])
+  }, [concerts, searchQuery, selectedCity, selectedVendor, attendedFilter, selectedYear])
 
   const stats = useMemo(() => {
     const yearConcerts = concerts.filter((c) => c.date.startsWith(selectedYear))
@@ -133,7 +73,79 @@ export default function ConcertTracker() {
       cities: totalCities,
       attendedPercentage,
     }
-  }, [selectedYear])
+  }, [concerts, selectedYear])
+
+  const handleImport = () => {
+    if (!importText.trim()) {
+      alert("Please paste CSV data to import.")
+      return
+    }
+    try {
+      const imported = parseGoogleSheetsCSV(importText)
+      if (imported.length > 0) {
+        const updated = [...concerts, ...imported]
+        setConcerts(updated)
+        try {
+          saveConcerts(updated)
+          setImportText("")
+          setShowImportForm(false)
+          alert(`Successfully imported ${imported.length} concerts!`)
+        } catch (error) {
+          alert("Failed to save imported concerts. Please try again.")
+          console.error("Save error:", error)
+        }
+      } else {
+        alert("No valid concerts found in the imported data. Please check the CSV format.")
+      }
+    } catch (error) {
+      alert("Error importing data. Please check the CSV format and try again.")
+      console.error("Import error:", error)
+    }
+  }
+
+  const handleAddConcert = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    try {
+      const formData = new FormData(e.currentTarget)
+      const dateStr = formData.get("date") as string
+      if (!dateStr) {
+        alert("Please select a date.")
+        return
+      }
+
+      const newConcert: Concert = {
+        show: (formData.get("show") as string).trim(),
+        date: dateStr,
+        dotw: new Date(dateStr).toLocaleDateString("en-US", { weekday: "long" }),
+        city: (formData.get("city") as string).trim(),
+        venue: (formData.get("venue") as string).trim(),
+        ticket: (formData.get("ticket") as string) === "YES" ? "YES" : "NO",
+        ticketVendor: (formData.get("ticketVendor") as string).trim(),
+        ticketLocation: (formData.get("ticketLocation") as string).trim(),
+        attended: (formData.get("attended") as string) === "YES" ? "YES" : "NO",
+        note: (formData.get("note") as string)?.trim() || undefined,
+      }
+
+      if (!newConcert.show || !newConcert.city || !newConcert.venue) {
+        alert("Please fill in all required fields (Show, City, Venue).")
+        return
+      }
+
+      const updated = [...concerts, newConcert]
+      setConcerts(updated)
+      try {
+        saveConcerts(updated)
+        e.currentTarget.reset()
+        setShowAddForm(false)
+      } catch (error) {
+        alert("Failed to save concert. Please try again.")
+        console.error("Save error:", error)
+      }
+    } catch (error) {
+      alert("Error adding concert. Please try again.")
+      console.error("Add concert error:", error)
+    }
+  }
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-background overflow-hidden">
@@ -214,35 +226,177 @@ export default function ConcertTracker() {
           <div className="space-y-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <h2 className="text-3xl md:text-5xl font-bold text-foreground">Concerts</h2>
-              <div className="flex gap-4 md:gap-6 text-sm font-mono">
-                <div className="text-center">
-                  <div
-                    className="text-2xl md:text-3xl font-bold text-neon-cyan"
-                    style={{ textShadow: "0 0 15px oklch(0.72 0.21 195 / 0.5)" }}
-                  >
-                    {stats.total}
-                  </div>
-                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Total</div>
-                </div>
-                <div className="text-center">
-                  <div
-                    className="text-2xl md:text-3xl font-bold text-neon-magenta"
-                    style={{ textShadow: "0 0 15px oklch(0.7 0.24 330 / 0.5)" }}
-                  >
-                    {stats.cities}
-                  </div>
-                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Cities</div>
-                </div>
-                <div className="text-center">
-                  <div
-                    className="text-2xl md:text-3xl font-bold text-neon-orange"
-                    style={{ textShadow: "0 0 15px oklch(0.75 0.18 60 / 0.5)" }}
-                  >
-                    {stats.attendedPercentage}%
-                  </div>
-                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Attended</div>
-                </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setShowImportForm(!showImportForm)}
+                  variant="outline"
+                  size="sm"
+                  className="font-mono text-xs"
+                >
+                  <Upload className="w-4 h-4 mr-1" />
+                  Import
+                </Button>
+                <Button
+                  onClick={() => setShowAddForm(!showAddForm)}
+                  variant="default"
+                  size="sm"
+                  className="font-mono text-xs"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Show
+                </Button>
               </div>
+            </div>
+          </div>
+
+          {/* Import Form */}
+          {showImportForm && (
+            <Card className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold font-mono">Import from Google Sheets</h3>
+                  <Button
+                    onClick={() => {
+                      setShowImportForm(false)
+                      setImportText("")
+                    }}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground font-mono">
+                  Export your Google Sheet as CSV, then paste it here. The format should be: SHØW, DATE, DOTW, CITY,
+                  VENUE, TICKET, TICKET VENDOR, TICKET LOCATION, ATTENDED, NOTE
+                </p>
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder="Paste CSV data here..."
+                  className="w-full min-h-[200px] px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none focus:shadow-[0_0_10px_rgba(0,255,255,0.2)] transition-all font-mono text-xs"
+                />
+                <Button onClick={handleImport} className="font-mono text-xs">
+                  Import Concerts
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {/* Add Concert Form */}
+          {showAddForm && (
+            <Card className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50">
+              <form onSubmit={handleAddConcert} className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold font-mono">Add New Show</h3>
+                  <Button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Show Name *
+                    </label>
+                    <Input name="show" required className="font-mono text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Date *
+                    </label>
+                    <Input name="date" type="date" required className="font-mono text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">City *</label>
+                    <Input name="city" required className="font-mono text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Venue *
+                    </label>
+                    <Input name="venue" required className="font-mono text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Ticket (YES/NO)
+                    </label>
+                    <select
+                      name="ticket"
+                      className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-xs"
+                    >
+                      <option value="YES">YES</option>
+                      <option value="NO">NO</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Ticket Vendor
+                    </label>
+                    <Input name="ticketVendor" className="font-mono text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Ticket Location
+                    </label>
+                    <Input name="ticketLocation" className="font-mono text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Attended (YES/NO)
+                    </label>
+                    <select
+                      name="attended"
+                      className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-xs"
+                    >
+                      <option value="NO">NO</option>
+                      <option value="YES">YES</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">Note</label>
+                    <Input name="note" className="font-mono text-xs" />
+                  </div>
+                </div>
+                <Button type="submit" className="font-mono text-xs">
+                  Add Show
+                </Button>
+              </form>
+            </Card>
+          )}
+
+          {/* Stats */}
+          <div className="flex gap-4 md:gap-6 text-sm font-mono">
+            <div className="text-center">
+              <div
+                className="text-2xl md:text-3xl font-bold text-neon-cyan"
+                style={{ textShadow: "0 0 15px oklch(0.72 0.21 195 / 0.5)" }}
+              >
+                {stats.total}
+              </div>
+              <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Total</div>
+            </div>
+            <div className="text-center">
+              <div
+                className="text-2xl md:text-3xl font-bold text-neon-magenta"
+                style={{ textShadow: "0 0 15px oklch(0.7 0.24 330 / 0.5)" }}
+              >
+                {stats.cities}
+              </div>
+              <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Cities</div>
+            </div>
+            <div className="text-center">
+              <div
+                className="text-2xl md:text-3xl font-bold text-neon-orange"
+                style={{ textShadow: "0 0 15px oklch(0.75 0.18 60 / 0.5)" }}
+              >
+                {stats.attendedPercentage}%
+              </div>
+              <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Attended</div>
             </div>
           </div>
 
