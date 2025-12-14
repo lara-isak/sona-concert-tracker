@@ -389,11 +389,11 @@ export default function ConcertTracker() {
                         </>
                       )}
                       {concert.attended === "YES" ? (
-                        <Badge className="bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50 shadow-[0_0_10px_rgba(0,255,255,0.2)] font-mono text-xs">
+                        <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
                           ATTENDED
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
+                        <Badge className="bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50 shadow-[0_0_10px_rgba(0,255,255,0.2)] font-mono text-xs">
                           UPCOMING
                         </Badge>
                       )}
