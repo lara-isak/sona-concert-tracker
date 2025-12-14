@@ -12,8 +12,7 @@ export default function ConcertTracker() {
   const [concerts, setConcerts] = useState<Concert[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCity, setSelectedCity] = useState("All")
-  const [selectedVendor, setSelectedVendor] = useState("All")
-  const [attendedFilter, setAttendedFilter] = useState<"All" | "Attended" | "Not Attended">("All")
+  const [attendedFilter, setAttendedFilter] = useState<"All" | "Attended" | "Not Attended" | "Upcoming">("All")
   const [selectedYear, setSelectedYear] = useState("2025")
   const [showAddForm, setShowAddForm] = useState(false)
   const [showImportForm, setShowImportForm] = useState(false)
@@ -37,7 +36,6 @@ export default function ConcertTracker() {
   }, [concerts, selectedYear])
 
   const cities = useMemo(() => ["All", ...Array.from(new Set(concerts.map((c) => c.city)))], [concerts])
-  const vendors = useMemo(() => ["All", ...Array.from(new Set(concerts.map((c) => c.ticketVendor)))], [concerts])
   const years = useMemo(() => {
     const yearSet = new Set(concerts.map((c) => c.date.substring(0, 4)))
     return Array.from(yearSet).sort()
@@ -51,7 +49,6 @@ export default function ConcertTracker() {
         concert.venue.toLowerCase().includes(searchQuery.toLowerCase())
 
       const matchesCity = selectedCity === "All" || concert.city === selectedCity
-      const matchesVendor = selectedVendor === "All" || concert.ticketVendor === selectedVendor
       const isAttended = concert.attended === "YES"
       const isNotAttended = concert.attended === "NO"
       const isNotYet = concert.attended === "NOT YET"
@@ -69,23 +66,23 @@ export default function ConcertTracker() {
       const matchesAttended =
         attendedFilter === "All" ||
         (attendedFilter === "Attended" && isAttended) ||
-        (attendedFilter === "Not Attended" && (isNotAttended || (isNotYet && isUpcoming)))
+        (attendedFilter === "Not Attended" && isNotAttended) ||
+        (attendedFilter === "Upcoming" && isUpcoming)
       const matchesYear = concert.date.startsWith(selectedYear)
 
-      return matchesSearch && matchesCity && matchesVendor && matchesAttended && matchesYear
+      return matchesSearch && matchesCity && matchesAttended && matchesYear
     })
-  }, [concerts, searchQuery, selectedCity, selectedVendor, attendedFilter, selectedYear])
+  }, [concerts, searchQuery, selectedCity, attendedFilter, selectedYear])
 
   const stats = useMemo(() => {
     const yearConcerts = concerts.filter((c) => c.date.startsWith(selectedYear))
     const attended = yearConcerts.filter((c) => c.attended === "YES").length
     const totalCities = new Set(yearConcerts.map((c) => c.city)).size
-    const attendedPercentage = yearConcerts.length > 0 ? Math.round((attended / yearConcerts.length) * 100) : 0
 
     return {
       total: yearConcerts.length,
       cities: totalCities,
-      attendedPercentage,
+      attended,
     }
   }, [concerts, selectedYear])
 
@@ -388,15 +385,6 @@ export default function ConcertTracker() {
           <div className="flex gap-4 md:gap-6 text-sm font-mono">
             <div className="text-center">
               <div
-                className="text-2xl md:text-3xl font-bold text-neon-cyan"
-                style={{ textShadow: "0 0 15px oklch(0.72 0.21 195 / 0.5)" }}
-              >
-                {stats.total}
-              </div>
-              <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Total</div>
-            </div>
-            <div className="text-center">
-              <div
                 className="text-2xl md:text-3xl font-bold text-neon-magenta"
                 style={{ textShadow: "0 0 15px oklch(0.7 0.24 330 / 0.5)" }}
               >
@@ -409,9 +397,18 @@ export default function ConcertTracker() {
                 className="text-2xl md:text-3xl font-bold text-neon-orange"
                 style={{ textShadow: "0 0 15px oklch(0.75 0.18 60 / 0.5)" }}
               >
-                {stats.attendedPercentage}%
+                {stats.attended}
               </div>
               <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Attended</div>
+            </div>
+            <div className="text-center">
+              <div
+                className="text-2xl md:text-3xl font-bold text-neon-cyan"
+                style={{ textShadow: "0 0 15px oklch(0.72 0.21 195 / 0.5)" }}
+              >
+                {stats.total}
+              </div>
+              <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Total</div>
             </div>
           </div>
 
@@ -447,29 +444,11 @@ export default function ConcertTracker() {
                   </select>
                 </div>
 
-                {/* Vendor Filter */}
-                <div className="space-y-2">
-                  <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
-                    Ticket Vendor
-                  </label>
-                  <select
-                    value={selectedVendor}
-                    onChange={(e) => setSelectedVendor(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none focus:shadow-[0_0_10px_rgba(0,255,255,0.2)] transition-all"
-                  >
-                    {vendors.map((vendor) => (
-                      <option key={vendor} value={vendor}>
-                        {vendor}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
                 {/* Attended Filter */}
                 <div className="space-y-2">
                   <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">Attended</label>
                   <div className="flex gap-2">
-                    {(["All", "Attended", "Not Attended"] as const).map((filter) => (
+                    {(["All", "Attended", "Not Attended", "Upcoming"] as const).map((filter) => (
                       <Button
                         key={filter}
                         onClick={() => setAttendedFilter(filter)}
@@ -481,7 +460,7 @@ export default function ConcertTracker() {
                             : "border-border/50 hover:border-primary/30 hover:text-primary"
                         }`}
                       >
-                        {filter === "Not Attended" ? "Upcoming" : filter}
+                        {filter}
                       </Button>
                     ))}
                   </div>
@@ -543,22 +522,6 @@ export default function ConcertTracker() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      {concert.ticket === "YES" && (
-                        <>
-                          <Badge
-                            variant="outline"
-                            className="border-neon-purple/50 text-neon-purple bg-neon-purple/10 font-mono text-xs"
-                          >
-                            <Ticket className="w-3 h-3 mr-1" />
-                            {concert.ticketVendor}
-                          </Badge>
-                          {concert.ticketLocation && concert.ticketLocation !== "N/A" && (
-                            <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
-                              {concert.ticketLocation}
-                            </Badge>
-                          )}
-                        </>
-                      )}
                       {(() => {
                         if (concert.attended === "YES") {
                           return (
@@ -598,6 +561,22 @@ export default function ConcertTracker() {
                         // Fallback
                         return null
                       })()}
+                      {concert.ticket === "YES" && (
+                        <>
+                          <Badge
+                            variant="outline"
+                            className="border-neon-purple/50 text-neon-purple bg-neon-purple/10 font-mono text-xs"
+                          >
+                            <Ticket className="w-3 h-3 mr-1" />
+                            {concert.ticketVendor}
+                          </Badge>
+                          {concert.ticketLocation && concert.ticketLocation !== "N/A" && (
+                            <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
+                              {concert.ticketLocation}
+                            </Badge>
+                          )}
+                        </>
+                      )}
                       {concert.note && (
                         <Badge
                           variant="outline"
