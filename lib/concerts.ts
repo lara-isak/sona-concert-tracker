@@ -7,7 +7,7 @@ export type Concert = {
   ticket: "YES" | "NO"
   ticketVendor: string
   ticketLocation: string
-  attended: "YES" | "NO"
+  attended: "YES" | "NO" | "NOT YET"
   note?: string
 }
 
@@ -78,7 +78,15 @@ export function parseGoogleSheetsCSV(csvText: string): Concert[] {
       const ticketVendor = values[6]?.trim() || ""
       const ticketLocation = values[7]?.trim() || ""
       const attendedValue = values[8]?.trim().toUpperCase()
-      const attended = attendedValue === "YES" ? "YES" : "NO"
+      // Handle "YES", "NO", "NOT YET" values
+      let attended: "YES" | "NO" | "NOT YET"
+      if (attendedValue === "YES") {
+        attended = "YES"
+      } else if (attendedValue === "NOT YET" || attendedValue === "NOTYET") {
+        attended = "NOT YET"
+      } else {
+        attended = "NO"
+      }
       const note = values[9]?.trim() || undefined
 
       // Skip empty rows
@@ -102,7 +110,7 @@ export function parseGoogleSheetsCSV(csvText: string): Concert[] {
         ticket,
         ticketVendor,
         ticketLocation,
-        attended: attended === "YES" ? "YES" : "NO",
+        attended,
         note: note || undefined,
       })
     }

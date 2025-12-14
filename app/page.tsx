@@ -52,18 +52,24 @@ export default function ConcertTracker() {
 
       const matchesCity = selectedCity === "All" || concert.city === selectedCity
       const matchesVendor = selectedVendor === "All" || concert.ticketVendor === selectedVendor
-      const concertDate = new Date(concert.date)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const isPast = concertDate < today
       const isAttended = concert.attended === "YES"
-      const isUpcoming = !isPast && !isAttended
-      const isNotAttended = isPast && !isAttended
+      const isNotAttended = concert.attended === "NO"
+      const isNotYet = concert.attended === "NOT YET"
+      
+      // For "NOT YET", check if it's upcoming (today or future)
+      let isUpcoming = false
+      if (isNotYet) {
+        const concertDate = new Date(concert.date)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        concertDate.setHours(0, 0, 0, 0)
+        isUpcoming = concertDate >= today
+      }
 
       const matchesAttended =
         attendedFilter === "All" ||
         (attendedFilter === "Attended" && isAttended) ||
-        (attendedFilter === "Not Attended" && (isNotAttended || isUpcoming))
+        (attendedFilter === "Not Attended" && (isNotAttended || (isNotYet && isUpcoming)))
       const matchesYear = concert.date.startsWith(selectedYear)
 
       return matchesSearch && matchesCity && matchesVendor && matchesAttended && matchesYear
@@ -130,7 +136,7 @@ export default function ConcertTracker() {
         ticket: (formData.get("ticket") as string) === "YES" ? "YES" : "NO",
         ticketVendor: (formData.get("ticketVendor") as string).trim(),
         ticketLocation: (formData.get("ticketLocation") as string).trim(),
-        attended: (formData.get("attended") as string) === "YES" ? "YES" : "NO",
+        attended: (formData.get("attended") as string) === "YES" ? "YES" : (formData.get("attended") as string) === "NOT YET" ? "NOT YET" : "NO",
         note: (formData.get("note") as string)?.trim() || undefined,
       }
 
@@ -355,14 +361,15 @@ export default function ConcertTracker() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
-                      Attended (YES/NO)
+                      Attended Status
                     </label>
                     <select
                       name="attended"
                       className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-xs"
                     >
-                      <option value="NO">NO</option>
+                      <option value="NOT YET">NOT YET</option>
                       <option value="YES">YES</option>
+                      <option value="NO">NO</option>
                     </select>
                   </div>
                   <div className="space-y-2 md:col-span-2">
@@ -545,37 +552,51 @@ export default function ConcertTracker() {
                             <Ticket className="w-3 h-3 mr-1" />
                             {concert.ticketVendor}
                           </Badge>
-                          <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
-                            {concert.ticketLocation}
-                          </Badge>
+                          {concert.ticketLocation && concert.ticketLocation !== "N/A" && (
+                            <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
+                              {concert.ticketLocation}
+                            </Badge>
+                          )}
                         </>
                       )}
                       {(() => {
-                        const concertDate = new Date(concert.date)
-                        const today = new Date()
-                        today.setHours(0, 0, 0, 0)
-                        const isPast = concertDate < today
-                        const isAttended = concert.attended === "YES"
-
-                        if (isAttended) {
+                        if (concert.attended === "YES") {
                           return (
                             <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
                               ATTENDED
                             </Badge>
                           )
-                        } else if (isPast) {
+                        } else if (concert.attended === "NO") {
                           return (
                             <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
                               NOT ATTENDED
                             </Badge>
                           )
-                        } else {
-                          return (
-                            <Badge className="bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50 shadow-[0_0_10px_rgba(0,255,255,0.2)] font-mono text-xs">
-                              UPCOMING
-                            </Badge>
-                          )
+                        } else if (concert.attended === "NOT YET") {
+                          // Check if date is today or in the future
+                          const concertDate = new Date(concert.date)
+                          const today = new Date()
+                          today.setHours(0, 0, 0, 0)
+                          concertDate.setHours(0, 0, 0, 0)
+                          const isTodayOrFuture = concertDate >= today
+
+                          if (isTodayOrFuture) {
+                            return (
+                              <Badge className="bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50 shadow-[0_0_10px_rgba(0,255,255,0.2)] font-mono text-xs">
+                                UPCOMING
+                              </Badge>
+                            )
+                          } else {
+                            // Past date with "NOT YET" should show as NOT ATTENDED
+                            return (
+                              <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
+                                NOT ATTENDED
+                              </Badge>
+                            )
+                          }
                         }
+                        // Fallback
+                        return null
                       })()}
                       {concert.note && (
                         <Badge
