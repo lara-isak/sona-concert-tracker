@@ -27,8 +27,14 @@ export async function createShow(show: Show): Promise<Show> {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || "Failed to create show")
+      let errorMessage = "Failed to create show"
+      try {
+        const error = await response.json()
+        errorMessage = error.error || errorMessage
+      } catch {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`
+      }
+      throw new Error(errorMessage)
     }
 
     const data = await response.json()
@@ -62,8 +68,14 @@ export async function importShows(shows: Show[]): Promise<void> {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || "Failed to import shows")
+      let errorMessage = "Failed to import shows"
+      try {
+        const error = await response.json()
+        errorMessage = error.error || errorMessage
+      } catch {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`
+      }
+      throw new Error(errorMessage)
     }
 
     await response.json()

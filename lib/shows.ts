@@ -75,10 +75,26 @@ export function parseGoogleSheetsCSV(csvText: string): Show[] {
       // Convert date from DD.MM.YYYY to YYYY-MM-DD
       let date = dateStr
       if (dateStr.includes(".")) {
-        const [day, month, year] = dateStr.split(".")
-        if (day && month && year) {
-          date = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+        const parts = dateStr.split(".")
+        if (parts.length === 3) {
+          const [day, month, year] = parts
+          if (day && month && year) {
+            // Validate and convert
+            const dayNum = parseInt(day.trim(), 10)
+            const monthNum = parseInt(month.trim(), 10)
+            const yearNum = parseInt(year.trim(), 10)
+            
+            if (!isNaN(dayNum) && !isNaN(monthNum) && !isNaN(yearNum)) {
+              date = `${yearNum}-${month.trim().padStart(2, "0")}-${day.trim().padStart(2, "0")}`
+            }
+          }
         }
+      }
+      
+      // Validate date format is YYYY-MM-DD before proceeding
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        console.warn(`Skipping invalid date format: ${dateStr} (converted to: ${date})`)
+        continue
       }
 
       shows.push({

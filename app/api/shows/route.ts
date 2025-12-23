@@ -3,6 +3,28 @@ import { supabase } from "@/lib/supabase"
 import type { Show } from "@/lib/shows"
 import type { Database } from "@/lib/database.types"
 
+// Helper function to validate date format and value
+function validateDate(date: string, showName?: string): { valid: boolean; error?: string } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return {
+      valid: false,
+      error: showName
+        ? `Invalid date format for show "${showName}": ${date}. Expected YYYY-MM-DD format.`
+        : `Invalid date format: ${date}. Expected YYYY-MM-DD format.`,
+    }
+  }
+
+  const dateObj = new Date(date)
+  if (isNaN(dateObj.getTime())) {
+    return {
+      valid: false,
+      error: showName ? `Invalid date value for show "${showName}": ${date}` : `Invalid date value: ${date}`,
+    }
+  }
+
+  return { valid: true }
+}
+
 // GET - Fetch all shows
 export async function GET() {
   try {
@@ -42,6 +64,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const show: Show = body
 
+    // Validate required fields
+    if (!show.show || !show.date || !show.city || !show.venue) {
+      return NextResponse.json(
+        { error: `Missing required fields: show=${show.show}, date=${show.date}, city=${show.city}, venue=${show.venue}` },
+        { status: 400 }
+      )
+    }
+
+    // Validate date format and value
+    const dateValidation = validateDate(show.date)
+    if (!dateValidation.valid) {
+      return NextResponse.json({ error: dateValidation.error }, { status: 400 })
+    }
+
     // Transform Show type to database format
     const insertData: Database["public"]["Tables"]["shows"]["Insert"] = {
       show: show.show,
@@ -63,13 +99,16 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("Supabase error:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ 
+        error: `Failed to create show: ${error.message}${error.details ? ` (Details: ${error.details})` : ""}${error.hint ? ` (Hint: ${error.hint})` : ""}` 
+      }, { status: 500 })
     }
 
     return NextResponse.json({ show: data }, { status: 201 })
   } catch (error) {
     console.error("API error:", error)
-    return NextResponse.json({ error: "Failed to create show" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : "Failed to create show"
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
 
@@ -79,12 +118,33 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const shows: Show[] = body.shows
 
+    if (!shows || !Array.isArray(shows) || shows.length === 0) {
+      return NextResponse.json({ error: "No shows provided to import" }, { status: 400 })
+    }
+
+    // Validate shows data
+    for (const show of shows) {
+      if (!show.show || !show.date || !show.city || !show.venue) {
+        return NextResponse.json(
+          { error: `Invalid show data: missing required fields (show: ${show.show}, date: ${show.date}, city: ${show.city}, venue: ${show.venue})` },
+          { status: 400 }
+        )
+      }
+      
+      // Validate date format and value
+      const dateValidation = validateDate(show.date, show.show)
+      if (!dateValidation.valid) {
+        return NextResponse.json({ error: dateValidation.error }, { status: 400 })
+      }
+    }
+
     // Delete all existing shows
-    const { error: deleteError } = await supabase.from("shows").delete().neq("id", "")
+    // Use a filter that matches all rows: created_at >= a very old date (matches all rows)
+    const { error: deleteError } = await supabase.from("shows").delete().gte("created_at", "1970-01-01")
 
     if (deleteError) {
       console.error("Delete error:", deleteError)
-      return NextResponse.json({ error: deleteError.message }, { status: 500 })
+      return NextResponse.json({ error: `Failed to delete existing shows: ${deleteError.message} (Code: ${deleteError.code})` }, { status: 500 })
     }
 
     // Insert new shows
@@ -103,14 +163,17 @@ export async function PUT(request: NextRequest) {
     const { data, error } = await supabase.from("shows").insert(showsToInsert as any).select()
 
     if (error) {
-      console.error("Supabase error:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error("Supabase insert error:", error)
+      return NextResponse.json({ 
+        error: `Failed to insert shows: ${error.message}${error.details ? ` (Details: ${error.details})` : ""}${error.hint ? ` (Hint: ${error.hint})` : ""}` 
+      }, { status: 500 })
     }
 
     return NextResponse.json({ shows: data, count: data?.length || 0 })
   } catch (error) {
     console.error("API error:", error)
-    return NextResponse.json({ error: "Failed to update shows" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : "Failed to update shows"
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
 

@@ -110,8 +110,8 @@ export default function ShowTracker() {
       const imported = parseGoogleSheetsCSV(importText)
       if (imported.length > 0) {
         try {
-          // Import all shows (replaces existing)
-          await importShows([...shows, ...imported])
+          // Import shows (PUT endpoint deletes all existing shows first, then inserts new ones)
+          await importShows(imported)
           // Reload shows from API
           const data = await fetchShows()
           setShows(data)
@@ -119,7 +119,8 @@ export default function ShowTracker() {
           setShowImportForm(false)
           alert(`Successfully imported ${imported.length} shows!`)
         } catch (error) {
-          alert("Failed to save imported shows. Please try again.")
+          const errorMessage = error instanceof Error ? error.message : "Failed to save imported shows"
+          alert(`Failed to import shows: ${errorMessage}`)
           console.error("Save error:", error)
         }
       } else {
@@ -133,8 +134,11 @@ export default function ShowTracker() {
 
   const handleAddShow = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    const form = e.currentTarget
+    if (!form) return
+
     try {
-      const formData = new FormData(e.currentTarget)
+      const formData = new FormData(form)
       const dateStr = formData.get("date") as string
       if (!dateStr) {
         alert("Please select a date.")
@@ -163,10 +167,14 @@ export default function ShowTracker() {
         // Reload shows from API
         const data = await fetchShows()
         setShows(data)
-        e.currentTarget.reset()
+        // Reset form if it still exists
+        if (form) {
+          form.reset()
+        }
         setShowAddForm(false)
       } catch (error) {
-        alert("Failed to save show. Please try again.")
+        const errorMessage = error instanceof Error ? error.message : "Failed to save show"
+        alert(`Failed to save show: ${errorMessage}`)
         console.error("Save error:", error)
       }
     } catch (error) {
