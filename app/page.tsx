@@ -372,23 +372,23 @@ export default function ShowTracker() {
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
                       Show Name *
                     </label>
-                    <Input name="show" required className="font-mono text-xs" />
+                    <Input name="show" required className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
                       Date *
                     </label>
-                    <Input name="date" type="date" required className="font-mono text-xs" />
+                    <Input name="date" type="date" required className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">City *</label>
-                    <Input name="city" required className="font-mono text-xs" />
+                    <Input name="city" required className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
                       Venue *
                     </label>
-                    <Input name="venue" required className="font-mono text-xs" />
+                    <Input name="venue" required className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
@@ -396,7 +396,7 @@ export default function ShowTracker() {
                     </label>
                     <select
                       name="ticket"
-                      className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-xs"
+                      className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-base md:text-xs"
                     >
                       <option value="YES">YES</option>
                       <option value="NO">NO</option>
@@ -406,13 +406,13 @@ export default function ShowTracker() {
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
                       Ticket Vendor
                     </label>
-                    <Input name="ticketVendor" className="font-mono text-xs" />
+                    <Input name="ticketVendor" className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
                       Ticket Location
                     </label>
-                    <Input name="ticketLocation" className="font-mono text-xs" />
+                    <Input name="ticketLocation" className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
@@ -420,7 +420,7 @@ export default function ShowTracker() {
                     </label>
                     <select
                       name="attendance"
-                      className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-xs"
+                      className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-base md:text-xs"
                     >
                       <option value="NOT YET">NOT YET</option>
                       <option value="YES">YES</option>
@@ -431,7 +431,7 @@ export default function ShowTracker() {
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">Note</label>
-                    <Input name="note" className="font-mono text-xs" />
+                    <Input name="note" className="font-mono text-base md:text-xs" />
                   </div>
                 </div>
                 <Button type="submit" className="font-mono text-xs">
