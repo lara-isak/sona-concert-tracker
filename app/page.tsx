@@ -50,7 +50,7 @@ export default function ConcertTracker() {
 
       const matchesCity = selectedCity === "All" || concert.city === selectedCity
       const isAttended = concert.attended === "YES"
-      const isNotAttended = concert.attended === "NO"
+      const isNotAttended = concert.attended === "NO" || concert.attended === "CANCELLED" || concert.attended === "POSTPONED"
       const isNotYet = concert.attended === "NOT YET"
       
       // For "NOT YET", check if it's upcoming (today or future)
@@ -133,7 +133,7 @@ export default function ConcertTracker() {
         ticket: (formData.get("ticket") as string) === "YES" ? "YES" : "NO",
         ticketVendor: (formData.get("ticketVendor") as string).trim(),
         ticketLocation: (formData.get("ticketLocation") as string).trim(),
-        attended: (formData.get("attended") as string) === "YES" ? "YES" : (formData.get("attended") as string) === "NOT YET" ? "NOT YET" : "NO",
+        attended: (formData.get("attended") as string) as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
         note: (formData.get("note") as string)?.trim() || undefined,
       }
 
@@ -367,6 +367,8 @@ export default function ConcertTracker() {
                       <option value="NOT YET">NOT YET</option>
                       <option value="YES">YES</option>
                       <option value="NO">NO</option>
+                      <option value="CANCELLED">CANCELLED</option>
+                      <option value="POSTPONED">POSTPONED</option>
                     </select>
                   </div>
                   <div className="space-y-2 md:col-span-2">
@@ -383,24 +385,24 @@ export default function ConcertTracker() {
 
           {/* Stats */}
           <div className="flex gap-4 md:gap-6 text-sm font-mono">
-            <div className="text-center">
-              <div
-                className="text-2xl md:text-3xl font-bold text-neon-magenta"
-                style={{ textShadow: "0 0 15px oklch(0.7 0.24 330 / 0.5)" }}
-              >
-                {stats.cities}
-              </div>
-              <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Cities</div>
-            </div>
-            <div className="text-center">
-              <div
-                className="text-2xl md:text-3xl font-bold text-neon-orange"
-                style={{ textShadow: "0 0 15px oklch(0.75 0.18 60 / 0.5)" }}
-              >
+                <div className="text-center">
+                  <div
+                    className="text-2xl md:text-3xl font-bold text-neon-magenta"
+                    style={{ textShadow: "0 0 15px oklch(0.7 0.24 330 / 0.5)" }}
+                  >
+                    {stats.cities}
+                  </div>
+                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Cities</div>
+                </div>
+                <div className="text-center">
+                  <div
+                    className="text-2xl md:text-3xl font-bold text-neon-orange"
+                    style={{ textShadow: "0 0 15px oklch(0.75 0.18 60 / 0.5)" }}
+                  >
                 {stats.attended}
-              </div>
-              <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Attended</div>
-            </div>
+                  </div>
+                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Attended</div>
+                </div>
             <div className="text-center">
               <div
                 className="text-2xl md:text-3xl font-bold text-neon-cyan"
@@ -523,6 +525,9 @@ export default function ConcertTracker() {
 
                     <div className="flex flex-wrap items-center gap-2">
                       {(() => {
+                        // Debug: log the attended value to verify it's correct
+                        // console.log("Concert attended value:", concert.attended, "Type:", typeof concert.attended)
+                        
                         if (concert.attended === "YES") {
                           return (
                             <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
@@ -533,6 +538,18 @@ export default function ConcertTracker() {
                           return (
                             <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
                               NOT ATTENDED
+                            </Badge>
+                          )
+                        } else if (concert.attended === "CANCELLED") {
+                          return (
+                            <Badge variant="outline" className="border-destructive/50 text-destructive bg-destructive/10 font-mono text-xs">
+                              CANCELLED
+                            </Badge>
+                          )
+                        } else if (concert.attended === "POSTPONED") {
+                          return (
+                            <Badge variant="outline" className="border-neon-orange/50 text-neon-orange bg-neon-orange/10 font-mono text-xs">
+                              POSTPONED
                             </Badge>
                           )
                         } else if (concert.attended === "NOT YET") {
@@ -571,13 +588,18 @@ export default function ConcertTracker() {
                             {concert.ticketVendor}
                           </Badge>
                           {concert.ticketLocation && concert.ticketLocation !== "N/A" && (
-                            <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
-                              {concert.ticketLocation}
-                            </Badge>
+                          <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
+                            {concert.ticketLocation}
+                          </Badge>
                           )}
                         </>
                       )}
-                      {concert.note && (
+                    </div>
+                  </div>
+
+                  {concert.note && (
+                    <div className="mt-3 pt-3 border-t border-border/30">
+                      <div className="flex items-center gap-2">
                         <Badge
                           variant="outline"
                           className="border-neon-orange/50 text-neon-orange bg-neon-orange/10 font-mono text-xs"
@@ -585,13 +607,8 @@ export default function ConcertTracker() {
                           <FileText className="w-3 h-3 mr-1" />
                           NOTE
                         </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {concert.note && (
-                    <div className="mt-3 pt-3 border-t border-border/30">
-                      <p className="text-sm text-muted-foreground italic">{concert.note}</p>
+                        <p className="text-sm text-muted-foreground italic">{concert.note}</p>
+                      </div>
                     </div>
                   )}
                 </Card>
