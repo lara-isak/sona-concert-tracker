@@ -12,8 +12,8 @@ const roboto = Roboto({
 })
 
 export const metadata: Metadata = {
-  title: "SONA - Concert Tracker",
-  description: "Cyberpunk-themed concert tracking dashboard",
+  title: "SONA - Show Tracker",
+  description: "Cyberpunk-themed show tracking dashboard",
 }
 
 export default function RootLayout({

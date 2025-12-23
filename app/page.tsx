@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Search, MapPin, Ticket, FileText, Plus, Upload, X } from "lucide-react"
-import { getConcerts, saveConcerts, parseGoogleSheetsCSV, type Concert } from "@/lib/concerts"
+import { parseGoogleSheetsCSV, getDayOfWeek, type Show } from "@/lib/shows"
+import { fetchShows, createShow, importShows } from "@/lib/shows-api"
 
-export default function ConcertTracker() {
-  const [concerts, setConcerts] = useState<Concert[]>([])
+export default function ShowTracker() {
+  const [shows, setShows] = useState<Show[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCity, setSelectedCity] = useState("All")
   const [attendedFilter, setAttendedFilter] = useState<"All" | "Attended" | "Not Attended" | "Upcoming">("All")
@@ -17,50 +18,64 @@ export default function ConcertTracker() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [showImportForm, setShowImportForm] = useState(false)
   const [importText, setImportText] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Load concerts from localStorage on mount
+  // Load shows from API on mount
   useEffect(() => {
-    const stored = getConcerts()
-    setConcerts(stored)
+    const loadShows = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        const data = await fetchShows()
+        setShows(data)
+      } catch (err) {
+        setError("Failed to load shows. Please refresh the page.")
+        console.error("Error loading shows:", err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadShows()
   }, [])
 
   // Update selected year based on available data
   useEffect(() => {
-    if (concerts.length > 0) {
-      const years = new Set(concerts.map((c) => c.date.substring(0, 4)))
+    if (shows.length > 0) {
+      const years = new Set(shows.map((show) => show.date.substring(0, 4)))
       const sortedYears = Array.from(years).sort()
       if (sortedYears.length > 0 && !sortedYears.includes(selectedYear)) {
         setSelectedYear(sortedYears[sortedYears.length - 1])
       }
     }
-  }, [concerts, selectedYear])
+  }, [shows, selectedYear])
 
-  const cities = useMemo(() => ["All", ...Array.from(new Set(concerts.map((c) => c.city)))], [concerts])
+  const cities = useMemo(() => ["All", ...Array.from(new Set(shows.map((show) => show.city)))], [shows])
   const years = useMemo(() => {
-    const yearSet = new Set(concerts.map((c) => c.date.substring(0, 4)))
+    const yearSet = new Set(shows.map((show) => show.date.substring(0, 4)))
     return Array.from(yearSet).sort()
-  }, [concerts])
+  }, [shows])
 
-  const filteredConcerts = useMemo(() => {
-    return concerts.filter((concert) => {
+  const filteredShows = useMemo(() => {
+    return shows.filter((show) => {
       const matchesSearch =
-        concert.show.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        concert.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        concert.venue.toLowerCase().includes(searchQuery.toLowerCase())
+        show.show.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        show.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        show.venue.toLowerCase().includes(searchQuery.toLowerCase())
 
-      const matchesCity = selectedCity === "All" || concert.city === selectedCity
-      const isAttended = concert.attended === "YES"
-      const isNotAttended = concert.attended === "NO" || concert.attended === "CANCELLED" || concert.attended === "POSTPONED"
-      const isNotYet = concert.attended === "NOT YET"
+      const matchesCity = selectedCity === "All" || show.city === selectedCity
+      const isAttended = show.attendance === "YES"
+      const isNotAttended = show.attendance === "NO" || show.attendance === "CANCELLED" || show.attendance === "POSTPONED"
+      const isNotYet = show.attendance === "NOT YET"
       
       // For "NOT YET", check if it's upcoming (today or future)
       let isUpcoming = false
       if (isNotYet) {
-        const concertDate = new Date(concert.date)
+        const showDate = new Date(show.date)
         const today = new Date()
         today.setHours(0, 0, 0, 0)
-        concertDate.setHours(0, 0, 0, 0)
-        isUpcoming = concertDate >= today
+        showDate.setHours(0, 0, 0, 0)
+        isUpcoming = showDate >= today
       }
 
       const matchesAttended =
@@ -68,25 +83,25 @@ export default function ConcertTracker() {
         (attendedFilter === "Attended" && isAttended) ||
         (attendedFilter === "Not Attended" && isNotAttended) ||
         (attendedFilter === "Upcoming" && isUpcoming)
-      const matchesYear = concert.date.startsWith(selectedYear)
+      const matchesYear = show.date.startsWith(selectedYear)
 
       return matchesSearch && matchesCity && matchesAttended && matchesYear
     })
-  }, [concerts, searchQuery, selectedCity, attendedFilter, selectedYear])
+  }, [shows, searchQuery, selectedCity, attendedFilter, selectedYear])
 
   const stats = useMemo(() => {
-    const yearConcerts = concerts.filter((c) => c.date.startsWith(selectedYear))
-    const attended = yearConcerts.filter((c) => c.attended === "YES").length
-    const totalCities = new Set(yearConcerts.map((c) => c.city)).size
+    const yearShows = shows.filter((show) => show.date.startsWith(selectedYear))
+    const attended = yearShows.filter((show) => show.attendance === "YES").length
+    const totalCities = new Set(yearShows.map((show) => show.city)).size
 
     return {
-      total: yearConcerts.length,
+      total: yearShows.length,
       cities: totalCities,
       attended,
     }
-  }, [concerts, selectedYear])
+  }, [shows, selectedYear])
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!importText.trim()) {
       alert("Please paste CSV data to import.")
       return
@@ -94,19 +109,21 @@ export default function ConcertTracker() {
     try {
       const imported = parseGoogleSheetsCSV(importText)
       if (imported.length > 0) {
-        const updated = [...concerts, ...imported]
-        setConcerts(updated)
         try {
-          saveConcerts(updated)
+          // Import all shows (replaces existing)
+          await importShows([...shows, ...imported])
+          // Reload shows from API
+          const data = await fetchShows()
+          setShows(data)
           setImportText("")
           setShowImportForm(false)
-          alert(`Successfully imported ${imported.length} concerts!`)
+          alert(`Successfully imported ${imported.length} shows!`)
         } catch (error) {
-          alert("Failed to save imported concerts. Please try again.")
+          alert("Failed to save imported shows. Please try again.")
           console.error("Save error:", error)
         }
       } else {
-        alert("No valid concerts found in the imported data. Please check the CSV format.")
+        alert("No valid shows found in the imported data. Please check the CSV format.")
       }
     } catch (error) {
       alert("Error importing data. Please check the CSV format and try again.")
@@ -114,7 +131,7 @@ export default function ConcertTracker() {
     }
   }
 
-  const handleAddConcert = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddShow = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     try {
       const formData = new FormData(e.currentTarget)
@@ -124,37 +141,37 @@ export default function ConcertTracker() {
         return
       }
 
-      const newConcert: Concert = {
+      const newShow: Show = {
         show: (formData.get("show") as string).trim(),
         date: dateStr,
-        dotw: new Date(dateStr).toLocaleDateString("en-US", { weekday: "long" }),
         city: (formData.get("city") as string).trim(),
         venue: (formData.get("venue") as string).trim(),
         ticket: (formData.get("ticket") as string) === "YES" ? "YES" : "NO",
         ticketVendor: (formData.get("ticketVendor") as string).trim(),
         ticketLocation: (formData.get("ticketLocation") as string).trim(),
-        attended: (formData.get("attended") as string) as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
+        attendance: (formData.get("attendance") as string) as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
         note: (formData.get("note") as string)?.trim() || undefined,
       }
 
-      if (!newConcert.show || !newConcert.city || !newConcert.venue) {
+      if (!newShow.show || !newShow.city || !newShow.venue) {
         alert("Please fill in all required fields (Show, City, Venue).")
         return
       }
 
-      const updated = [...concerts, newConcert]
-      setConcerts(updated)
       try {
-        saveConcerts(updated)
+        await createShow(newShow)
+        // Reload shows from API
+        const data = await fetchShows()
+        setShows(data)
         e.currentTarget.reset()
         setShowAddForm(false)
       } catch (error) {
-        alert("Failed to save concert. Please try again.")
+        alert("Failed to save show. Please try again.")
         console.error("Save error:", error)
       }
     } catch (error) {
-      alert("Error adding concert. Please try again.")
-      console.error("Add concert error:", error)
+      alert("Error adding show. Please try again.")
+      console.error("Add show error:", error)
     }
   }
 
@@ -236,7 +253,7 @@ export default function ConcertTracker() {
           {/* Header */}
           <div className="space-y-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <h2 className="text-3xl md:text-5xl font-bold text-foreground">Concerts</h2>
+              <h2 className="text-3xl md:text-5xl font-bold text-foreground">Shows</h2>
               <div className="flex gap-2">
                 <Button
                   onClick={() => setShowImportForm(!showImportForm)}
@@ -278,7 +295,7 @@ export default function ConcertTracker() {
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground font-mono">
-                  Export your Google Sheet as CSV, then paste it here. The format should be: SHØW, DATE, DOTW, CITY,
+                        Export your Google Sheet as CSV, then paste it here. The format should be: SHØW, DATE, DOTW (optional), CITY,
                   VENUE, TICKET, TICKET VENDOR, TICKET LOCATION, ATTENDED, NOTE
                 </p>
                 <textarea
@@ -288,16 +305,16 @@ export default function ConcertTracker() {
                   className="w-full min-h-[200px] px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none focus:shadow-[0_0_10px_rgba(0,255,255,0.2)] transition-all font-mono text-xs"
                 />
                 <Button onClick={handleImport} className="font-mono text-xs">
-                  Import Concerts
+                  Import Shows
                 </Button>
               </div>
             </Card>
           )}
 
-          {/* Add Concert Form */}
+          {/* Add Show Form */}
           {showAddForm && (
             <Card className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50">
-              <form onSubmit={handleAddConcert} className="space-y-4">
+              <form onSubmit={handleAddShow} className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-bold font-mono">Add New Show</h3>
                   <Button
@@ -358,10 +375,10 @@ export default function ConcertTracker() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
-                      Attended Status
+                      Attendance Status
                     </label>
                     <select
-                      name="attended"
+                      name="attendance"
                       className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-xs"
                     >
                       <option value="NOT YET">NOT YET</option>
@@ -469,10 +486,59 @@ export default function ConcertTracker() {
                 </div>
               </div>
             </div>
-          </Card>
+                </Card>
 
-          {/* Concert List */}
-          {filteredConcerts.length === 0 ? (
+                {/* Loading State */}
+                {isLoading && (
+                  <Card className="p-8 md:p-12 bg-card/30 backdrop-blur-sm border-border/50 text-center">
+                    <div className="space-y-3">
+                      <div
+                        className="text-2xl md:text-4xl font-mono text-neon-cyan"
+                        style={{ textShadow: "0 0 20px oklch(0.72 0.21 195 / 0.5)" }}
+                      >
+                        LOADING...
+                      </div>
+                      <p className="text-muted-foreground font-mono text-xs md:text-sm">Fetching shows...</p>
+                    </div>
+                  </Card>
+                )}
+
+                {/* Error State */}
+                {error && !isLoading && (
+                  <Card className="p-8 md:p-12 bg-card/30 backdrop-blur-sm border-border/50 text-center">
+                    <div className="space-y-3">
+                      <div
+                        className="text-2xl md:text-4xl font-mono text-destructive"
+                        style={{ textShadow: "0 0 20px oklch(0.577 0.245 27.325 / 0.5)" }}
+                      >
+                        ERROR
+                      </div>
+                      <p className="text-muted-foreground font-mono text-xs md:text-sm">{error}</p>
+                      <Button
+                        onClick={async () => {
+                          try {
+                            setIsLoading(true)
+                            setError(null)
+                            const data = await fetchShows()
+                            setShows(data)
+                          } catch (err) {
+                            setError("Failed to load shows. Please refresh the page.")
+                          } finally {
+                            setIsLoading(false)
+                          }
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="font-mono text-xs"
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  </Card>
+                )}
+
+                {/* Show List */}
+                {!isLoading && !error && filteredShows.length === 0 ? (
             <Card className="p-8 md:p-12 bg-card/30 backdrop-blur-sm border-border/50 text-center">
               <div className="space-y-3">
                 <div
@@ -482,13 +548,13 @@ export default function ConcertTracker() {
                   NO DATA FOUND
                 </div>
                 <p className="text-muted-foreground font-mono text-xs md:text-sm">
-                  No concerts match your current filters
+                  No shows match your current filters
                 </p>
               </div>
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredConcerts.map((concert, index) => (
+              {filteredShows.map((show, index) => (
                 <Card
                   key={index}
                   className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/30 hover:shadow-[0_0_20px_rgba(0,255,255,0.1)] transition-all duration-300"
@@ -501,23 +567,23 @@ export default function ConcertTracker() {
                             className="text-xl md:text-2xl font-bold text-neon-cyan font-mono"
                             style={{ textShadow: "0 0 10px oklch(0.72 0.21 195 / 0.5)" }}
                           >
-                            {new Date(concert.date).getDate()}
+                            {new Date(show.date).getDate()}
                           </div>
                           <div className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
-                            {new Date(concert.date).toLocaleDateString("en-US", { month: "short" })}
+                            {new Date(show.date).toLocaleDateString("en-US", { month: "short" })}
                           </div>
-                          <div className="text-xs text-muted-foreground font-mono hidden md:block">{concert.dotw}</div>
+                          <div className="text-xs text-muted-foreground font-mono hidden md:block">{getDayOfWeek(show.date)}</div>
                         </div>
 
                         <div className="flex-1 space-y-2">
-                          <h3 className="text-lg md:text-xl font-bold text-foreground">{concert.show}</h3>
+                          <h3 className="text-lg md:text-xl font-bold text-foreground">{show.show}</h3>
                           <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs md:text-sm text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <MapPin className="w-3 h-3 md:w-4 md:h-4 text-neon-magenta" />
-                              <span>{concert.city}</span>
+                              <span>{show.city}</span>
                             </div>
                             <span className="text-border">•</span>
-                            <span className="line-clamp-1">{concert.venue}</span>
+                            <span className="line-clamp-1">{show.venue}</span>
                           </div>
                         </div>
                       </div>
@@ -525,40 +591,37 @@ export default function ConcertTracker() {
 
                     <div className="flex flex-wrap items-center gap-2">
                       {(() => {
-                        // Debug: log the attended value to verify it's correct
-                        // console.log("Concert attended value:", concert.attended, "Type:", typeof concert.attended)
-                        
-                        if (concert.attended === "YES") {
+                        if (show.attendance === "YES") {
                           return (
                             <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
                               ATTENDED
                             </Badge>
                           )
-                        } else if (concert.attended === "NO") {
+                        } else if (show.attendance === "NO") {
                           return (
                             <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
                               NOT ATTENDED
                             </Badge>
                           )
-                        } else if (concert.attended === "CANCELLED") {
+                        } else if (show.attendance === "CANCELLED") {
                           return (
                             <Badge variant="outline" className="border-destructive/50 text-destructive bg-destructive/10 font-mono text-xs">
                               CANCELLED
                             </Badge>
                           )
-                        } else if (concert.attended === "POSTPONED") {
+                        } else if (show.attendance === "POSTPONED") {
                           return (
                             <Badge variant="outline" className="border-neon-orange/50 text-neon-orange bg-neon-orange/10 font-mono text-xs">
                               POSTPONED
                             </Badge>
                           )
-                        } else if (concert.attended === "NOT YET") {
+                        } else if (show.attendance === "NOT YET") {
                           // Check if date is today or in the future
-                          const concertDate = new Date(concert.date)
+                          const showDate = new Date(show.date)
                           const today = new Date()
                           today.setHours(0, 0, 0, 0)
-                          concertDate.setHours(0, 0, 0, 0)
-                          const isTodayOrFuture = concertDate >= today
+                          showDate.setHours(0, 0, 0, 0)
+                          const isTodayOrFuture = showDate >= today
 
                           if (isTodayOrFuture) {
                             return (
@@ -578,18 +641,18 @@ export default function ConcertTracker() {
                         // Fallback
                         return null
                       })()}
-                      {concert.ticket === "YES" && (
+                      {show.ticket === "YES" && (
                         <>
                           <Badge
                             variant="outline"
                             className="border-neon-purple/50 text-neon-purple bg-neon-purple/10 font-mono text-xs"
                           >
                             <Ticket className="w-3 h-3 mr-1" />
-                            {concert.ticketVendor}
+                            {show.ticketVendor}
                           </Badge>
-                          {concert.ticketLocation && concert.ticketLocation !== "N/A" && (
+                          {show.ticketLocation && show.ticketLocation !== "N/A" && (
                           <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
-                            {concert.ticketLocation}
+                            {show.ticketLocation}
                           </Badge>
                           )}
                         </>
@@ -597,7 +660,7 @@ export default function ConcertTracker() {
                     </div>
                   </div>
 
-                  {concert.note && (
+                  {show.note && (
                     <div className="mt-3 pt-3 border-t border-border/30">
                       <div className="flex items-center gap-2">
                         <Badge
@@ -607,7 +670,7 @@ export default function ConcertTracker() {
                           <FileText className="w-3 h-3 mr-1" />
                           NOTE
                         </Badge>
-                        <p className="text-sm text-muted-foreground italic">{concert.note}</p>
+                        <p className="text-sm text-muted-foreground italic">{show.note}</p>
                       </div>
                     </div>
                   )}

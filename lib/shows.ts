@@ -1,51 +1,26 @@
-export type Concert = {
+export type Show = {
   show: string
   date: string
-  dotw: string
   city: string
   venue: string
   ticket: "YES" | "NO"
   ticketVendor: string
   ticketLocation: string
-  attended: "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED"
+  attendance: "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED"
   note?: string
 }
 
-const STORAGE_KEY = "sona-concerts"
-
-export function getConcerts(): Concert[] {
-  if (typeof window === "undefined") return []
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (!stored) return []
-  try {
-    return JSON.parse(stored)
-  } catch {
-    return []
-  }
+// Helper function to get day of week from date
+export function getDayOfWeek(date: string): string {
+  return new Date(date).toLocaleDateString("en-US", { weekday: "long" })
 }
 
-export function saveConcerts(concerts: Concert[]): void {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(concerts))
-  } catch (error) {
-    console.error("Failed to save concerts to localStorage:", error)
-    throw new Error("Failed to save concerts. LocalStorage may be full or unavailable.")
-  }
-}
-
-export function addConcert(concert: Concert): void {
-  const concerts = getConcerts()
-  concerts.push(concert)
-  saveConcerts(concerts)
-}
-
-export function parseGoogleSheetsCSV(csvText: string): Concert[] {
+export function parseGoogleSheetsCSV(csvText: string): Show[] {
   const lines = csvText.split("\n").filter((line) => line.trim())
   if (lines.length < 2) return []
 
   // Skip header row (line 0)
-  const concerts: Concert[] = []
+  const shows: Show[] = []
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]
@@ -67,29 +42,30 @@ export function parseGoogleSheetsCSV(csvText: string): Concert[] {
     }
     values.push(current.trim())
 
-    // Expected columns: SHØW, DATE, DOTW, CITY, VENUE, TICKET, TICKET VENDOR, TICKET LOCATION, ATTENDED, NOTE
+    // Expected columns: SHØW, DATE, DOTW (optional), CITY, VENUE, TICKET, TICKET VENDOR, TICKET LOCATION, ATTENDED, NOTE
+    // Note: DOTW is ignored - we calculate it from DATE
     if (values.length >= 9) {
       const show = values[0]?.trim() || ""
       const dateStr = values[1]?.trim() || ""
-      const dotw = values[2]?.trim() || ""
+      // Skip dotw (values[2]) - we'll calculate it from date
       const city = values[3]?.trim() || ""
       const venue = values[4]?.trim() || ""
       const ticket = values[5]?.trim().toUpperCase() === "YES" ? "YES" : "NO"
       const ticketVendor = values[6]?.trim() || ""
       const ticketLocation = values[7]?.trim() || ""
-      const attendedValue = values[8]?.trim().toUpperCase()
+      const attendanceValue = values[8]?.trim().toUpperCase()
       // Handle "YES", "NO", "NOT YET", "CANCELLED", "POSTPONED" values
-      let attended: "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED"
-      if (attendedValue === "YES") {
-        attended = "YES"
-      } else if (attendedValue === "NOT YET" || attendedValue === "NOTYET" || attendedValue === "NOT YET ") {
-        attended = "NOT YET"
-      } else if (attendedValue === "CANCELLED" || attendedValue === "CANCELED") {
-        attended = "CANCELLED"
-      } else if (attendedValue === "POSTPONED") {
-        attended = "POSTPONED"
+      let attendance: "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED"
+      if (attendanceValue === "YES") {
+        attendance = "YES"
+      } else if (attendanceValue === "NOT YET" || attendanceValue === "NOTYET" || attendanceValue === "NOT YET ") {
+        attendance = "NOT YET"
+      } else if (attendanceValue === "CANCELLED" || attendanceValue === "CANCELED") {
+        attendance = "CANCELLED"
+      } else if (attendanceValue === "POSTPONED") {
+        attendance = "POSTPONED"
       } else {
-        attended = "NO"
+        attendance = "NO"
       }
       const note = values[9]?.trim() || undefined
 
@@ -105,21 +81,20 @@ export function parseGoogleSheetsCSV(csvText: string): Concert[] {
         }
       }
 
-      concerts.push({
+      shows.push({
         show,
         date,
-        dotw,
         city,
         venue,
         ticket,
         ticketVendor,
         ticketLocation,
-        attended,
+        attendance,
         note: note || undefined,
       })
     }
   }
 
-  return concerts.filter((c) => c.show && c.date)
+  return shows.filter((c) => c.show && c.date)
 }
 
