@@ -187,12 +187,15 @@ export default function ShowTracker() {
     <div className="flex flex-col md:flex-row h-screen bg-background overflow-hidden">
       {/* Mobile Header */}
       <div className="md:hidden border-b border-border/50 bg-card/30 backdrop-blur-sm p-4 flex items-center justify-between">
+              <div>
         <h1
           className="text-xl font-bold tracking-wider text-neon-cyan font-mono"
           style={{ textShadow: "0 0 20px oklch(0.72 0.21 195 / 0.5)" }}
         >
-          SONA
+                  SONA
         </h1>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider mt-0.5">SHOW TRACKER</p>
+              </div>
         <div className="flex gap-2">
           {years.map((year) => (
             <button
@@ -217,8 +220,9 @@ export default function ShowTracker() {
             className="text-2xl font-bold tracking-wider text-neon-cyan font-mono"
             style={{ textShadow: "0 0 20px oklch(0.72 0.21 195 / 0.5)" }}
           >
-            SONA
+                  SONA
           </h1>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider mt-1">SHOW TRACKER</p>
         </div>
 
         <div className="flex-1 p-4">
@@ -261,7 +265,36 @@ export default function ShowTracker() {
           {/* Header */}
           <div className="space-y-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <h2 className="text-3xl md:text-5xl font-bold text-foreground">Shows</h2>
+              {/* Stats */}
+              <div className="flex gap-4 md:gap-6 text-sm font-mono">
+                <div className="text-center">
+                  <div
+                    className="text-2xl md:text-3xl font-bold text-neon-magenta"
+                    style={{ textShadow: "0 0 15px oklch(0.7 0.24 330 / 0.5)" }}
+                  >
+                    {stats.cities}
+                  </div>
+                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Cities</div>
+                </div>
+                <div className="text-center">
+                  <div
+                    className="text-2xl md:text-3xl font-bold text-green-400"
+                    style={{ textShadow: "0 0 15px rgba(34,197,94,0.5)" }}
+                  >
+                    {stats.attended}
+                  </div>
+                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Attended</div>
+                </div>
+                <div className="text-center">
+                  <div
+                    className="text-2xl md:text-3xl font-bold text-neon-cyan"
+                    style={{ textShadow: "0 0 15px oklch(0.72 0.21 195 / 0.5)" }}
+                  >
+                    {stats.total}
+                  </div>
+                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Total</div>
+                </div>
+              </div>
               <div className="flex gap-2">
                 <Button
                   onClick={() => setShowImportForm(!showImportForm)}
@@ -408,37 +441,6 @@ export default function ShowTracker() {
             </Card>
           )}
 
-          {/* Stats */}
-          <div className="flex gap-4 md:gap-6 text-sm font-mono">
-                <div className="text-center">
-                  <div
-                    className="text-2xl md:text-3xl font-bold text-neon-magenta"
-                    style={{ textShadow: "0 0 15px oklch(0.7 0.24 330 / 0.5)" }}
-                  >
-                    {stats.cities}
-                  </div>
-                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Cities</div>
-                </div>
-                <div className="text-center">
-                  <div
-                    className="text-2xl md:text-3xl font-bold text-neon-orange"
-                    style={{ textShadow: "0 0 15px oklch(0.75 0.18 60 / 0.5)" }}
-                  >
-                {stats.attended}
-                  </div>
-                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Attended</div>
-                </div>
-            <div className="text-center">
-              <div
-                className="text-2xl md:text-3xl font-bold text-neon-cyan"
-                style={{ textShadow: "0 0 15px oklch(0.72 0.21 195 / 0.5)" }}
-              >
-                {stats.total}
-              </div>
-              <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Total</div>
-            </div>
-          </div>
-
           {/* Filters */}
           <Card className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
             <div className="space-y-4">
@@ -494,7 +496,7 @@ export default function ShowTracker() {
                 </div>
               </div>
             </div>
-                </Card>
+          </Card>
 
                 {/* Loading State */}
                 {isLoading && (
@@ -601,7 +603,7 @@ export default function ShowTracker() {
                       {(() => {
                         if (show.attendance === "YES") {
                           return (
-                            <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
+                            <Badge variant="outline" className="border-green-500/50 text-green-400 bg-green-500/10 font-mono text-xs shadow-[0_0_10px_rgba(34,197,94,0.2)]">
                               ATTENDED
                             </Badge>
                           )
@@ -679,7 +681,7 @@ export default function ShowTracker() {
                           NOTE
                         </Badge>
                         <p className="text-sm text-muted-foreground italic">{show.note}</p>
-                      </div>
+                  </div>
                     </div>
                   )}
                 </Card>
