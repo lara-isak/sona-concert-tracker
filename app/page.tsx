@@ -89,11 +89,20 @@ export default function ShowTracker() {
   const stats = useMemo(() => {
     const yearShows = shows.filter((show) => show.date.startsWith(selectedYear))
     const attended = yearShows.filter((show) => show.attendance === "YES").length
-    const totalCities = new Set(yearShows.map((show) => show.city)).size
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const upcoming = yearShows.filter((show) => {
+      if (show.attendance === "NOT YET") {
+        const showDate = new Date(show.date)
+        showDate.setHours(0, 0, 0, 0)
+        return showDate >= today
+      }
+      return false
+    }).length
 
     return {
       total: yearShows.length,
-      cities: totalCities,
+      upcoming,
       attended,
     }
   }, [shows, selectedYear])
@@ -269,9 +278,9 @@ export default function ShowTracker() {
                     className="text-2xl md:text-3xl font-bold text-neon-magenta"
                     style={{ textShadow: "0 0 15px oklch(0.7 0.24 330 / 0.5)" }}
                   >
-                    {stats.cities}
+                    {stats.upcoming}
                   </div>
-                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Cities</div>
+                  <div className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">Upcoming</div>
                 </div>
                 <div className="text-center">
                   <div
