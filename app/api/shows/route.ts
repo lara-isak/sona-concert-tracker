@@ -208,7 +208,6 @@ export async function PATCH(request: NextRequest) {
     if (showData.attendance !== undefined) updateData.attendance = showData.attendance
     if (showData.note !== undefined) updateData.note = showData.note || null
 
-    // @ts-expect-error - Supabase's update method has type inference issues with Partial types
     const { data, error } = await supabase
       .from("shows")
       .update(updateData)
