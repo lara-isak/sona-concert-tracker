@@ -12,7 +12,6 @@ import { fetchShows, createShow, importShows } from "@/lib/shows-api"
 export default function ShowTracker() {
   const [shows, setShows] = useState<Show[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCity, setSelectedCity] = useState("All")
   const [attendedFilter, setAttendedFilter] = useState<"All" | "Attended" | "Not Attended" | "Upcoming">("All")
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
   const [showAddForm, setShowAddForm] = useState(false)
@@ -50,7 +49,6 @@ export default function ShowTracker() {
     }
   }, [shows, selectedYear])
 
-  const cities = useMemo(() => ["All", ...Array.from(new Set(shows.map((show) => show.city)))], [shows])
   const years = useMemo(() => {
     const yearSet = new Set(shows.map((show) => show.date.substring(0, 4)))
     return Array.from(yearSet).sort()
@@ -63,7 +61,6 @@ export default function ShowTracker() {
         show.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
         show.venue.toLowerCase().includes(searchQuery.toLowerCase())
 
-      const matchesCity = selectedCity === "All" || show.city === selectedCity
       const isAttended = show.attendance === "YES"
       const isNotAttended = show.attendance === "NO" || show.attendance === "CANCELLED" || show.attendance === "POSTPONED"
       const isNotYet = show.attendance === "NOT YET"
@@ -85,9 +82,9 @@ export default function ShowTracker() {
         (attendedFilter === "Upcoming" && isUpcoming)
       const matchesYear = show.date.startsWith(selectedYear)
 
-      return matchesSearch && matchesCity && matchesAttended && matchesYear
+      return matchesSearch && matchesAttended && matchesYear
     })
-  }, [shows, searchQuery, selectedCity, attendedFilter, selectedYear])
+  }, [shows, searchQuery, attendedFilter, selectedYear])
 
   const stats = useMemo(() => {
     const yearShows = shows.filter((show) => show.date.startsWith(selectedYear))
@@ -456,23 +453,7 @@ export default function ShowTracker() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* City Filter */}
-                <div className="space-y-2">
-                  <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">City</label>
-                  <select
-                    value={selectedCity}
-                    onChange={(e) => setSelectedCity(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none focus:shadow-[0_0_10px_rgba(0,255,255,0.2)] transition-all"
-                  >
-                    {cities.map((city) => (
-                      <option key={city} value={city}>
-                        {city}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Attended Filter */}
                 <div className="space-y-2">
                   <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">Attended</label>
