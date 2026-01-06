@@ -210,7 +210,7 @@ export async function PATCH(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("shows")
-      .update(updateData)
+      .update(updateData as any)
       .eq("id", id)
       .select()
       .single()
