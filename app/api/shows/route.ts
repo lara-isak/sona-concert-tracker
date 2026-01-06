@@ -197,7 +197,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Transform Show type to database format
-    const updateData: Record<string, any> = {}
+    const updateData: Partial<Database["public"]["Tables"]["shows"]["Update"]> = {}
     if (showData.show !== undefined) updateData.show = showData.show
     if (showData.date !== undefined) updateData.date = showData.date
     if (showData.city !== undefined) updateData.city = showData.city
@@ -208,9 +208,10 @@ export async function PATCH(request: NextRequest) {
     if (showData.attendance !== undefined) updateData.attendance = showData.attendance
     if (showData.note !== undefined) updateData.note = showData.note || null
 
+    // @ts-expect-error - Supabase's update method has type inference issues with Partial types
     const { data, error } = await supabase
       .from("shows")
-      .update(updateData as any)
+      .update(updateData)
       .eq("id", id)
       .select()
       .single()

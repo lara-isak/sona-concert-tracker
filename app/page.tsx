@@ -70,8 +70,6 @@ export default function ShowTracker() {
       let isUpcoming = false
       if (isNotYet) {
         const showDate = new Date(show.date)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
         showDate.setHours(0, 0, 0, 0)
         isUpcoming = showDate >= today
       }
@@ -87,11 +85,16 @@ export default function ShowTracker() {
     })
   }, [shows, searchQuery, attendedFilter, selectedYear])
 
+  // Memoize today's date to avoid recalculating
+  const today = useMemo(() => {
+    const date = new Date()
+    date.setHours(0, 0, 0, 0)
+    return date
+  }, [])
+
   const stats = useMemo(() => {
     const yearShows = shows.filter((show) => show.date.startsWith(selectedYear))
     const attended = yearShows.filter((show) => show.attendance === "YES").length
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
     const upcoming = yearShows.filter((show) => {
       if (show.attendance === "NOT YET") {
         const showDate = new Date(show.date)
@@ -106,7 +109,7 @@ export default function ShowTracker() {
       upcoming,
       attended,
     }
-  }, [shows, selectedYear])
+  }, [shows, selectedYear, today])
 
   const handleImport = async () => {
     if (!importText.trim()) {
@@ -389,6 +392,7 @@ export default function ShowTracker() {
                     }}
                     variant="ghost"
                     size="sm"
+                    aria-label="Close import form"
                   >
                     <X className="w-4 h-4" />
                   </Button>
@@ -421,6 +425,7 @@ export default function ShowTracker() {
                     onClick={() => setEditingShow(null)}
                     variant="ghost"
                     size="sm"
+                    aria-label="Close edit form"
                   >
                     <X className="w-4 h-4" />
                   </Button>
@@ -512,6 +517,7 @@ export default function ShowTracker() {
                     onClick={() => setShowAddForm(false)}
                     variant="ghost"
                     size="sm"
+                    aria-label="Close add form"
                   >
                     <X className="w-4 h-4" />
                   </Button>
@@ -697,44 +703,48 @@ export default function ShowTracker() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredShows.map((show, index) => (
-                <Card
-                  key={show.id || index}
-                  className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/30 hover:shadow-[0_0_20px_rgba(0,255,255,0.1)] transition-all duration-300"
-                >
-                  <div className="flex flex-col gap-4">
-                    <div className="flex-1 space-y-3">
-                      <div className="flex items-start gap-3 md:gap-4">
-                        <div className="text-center min-w-[60px] md:min-w-[80px]">
-                          <div
-                            className="text-xl md:text-2xl font-bold text-neon-cyan font-mono"
-                            style={{ textShadow: "0 0 10px oklch(0.72 0.21 195 / 0.5)" }}
-                          >
-                            {new Date(show.date).getDate()}
+              {filteredShows.map((show, index) => {
+                // Parse date once per show for better performance
+                const showDate = new Date(show.date)
+                return (
+                  <Card
+                    key={show.id || index}
+                    className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/30 hover:shadow-[0_0_20px_rgba(0,255,255,0.1)] transition-all duration-300"
+                  >
+                    <div className="flex flex-col gap-4">
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-start gap-3 md:gap-4">
+                          <div className="text-center min-w-[60px] md:min-w-[80px]">
+                            <div
+                              className="text-xl md:text-2xl font-bold text-neon-cyan font-mono"
+                              style={{ textShadow: "0 0 10px oklch(0.72 0.21 195 / 0.5)" }}
+                            >
+                              {showDate.getDate()}
+                            </div>
+                            <div className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
+                              {showDate.toLocaleDateString("en-US", { month: "short" })}
+                            </div>
+                            <div className="text-xs text-muted-foreground font-mono hidden md:block">{getDayOfWeek(show.date)}</div>
                           </div>
-                          <div className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
-                            {new Date(show.date).toLocaleDateString("en-US", { month: "short" })}
-                          </div>
-                          <div className="text-xs text-muted-foreground font-mono hidden md:block">{getDayOfWeek(show.date)}</div>
-                        </div>
 
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-lg md:text-xl font-bold text-foreground">{show.show}</h3>
-                            {show.id && (
-                              <Button
-                                onClick={() => {
-                                  setEditingShow(show)
-                                  setShowAddForm(false)
-                                }}
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="text-lg md:text-xl font-bold text-foreground">{show.show}</h3>
+                              {show.id && (
+                                <Button
+                                  onClick={() => {
+                                    setEditingShow(show)
+                                    setShowAddForm(false)
+                                  }}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                                  aria-label={`Edit ${show.show}`}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
                           <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs md:text-sm text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <MapPin className="w-3 h-3 md:w-4 md:h-4 text-neon-magenta" />
@@ -775,11 +785,9 @@ export default function ShowTracker() {
                           )
                         } else if (show.attendance === "NOT YET") {
                           // Check if date is today or in the future
-                          const showDate = new Date(show.date)
-                          const today = new Date()
-                          today.setHours(0, 0, 0, 0)
-                          showDate.setHours(0, 0, 0, 0)
-                          const isTodayOrFuture = showDate >= today
+                          const showDateForCheck = new Date(show.date)
+                          showDateForCheck.setHours(0, 0, 0, 0)
+                          const isTodayOrFuture = showDateForCheck >= today
 
                           if (isTodayOrFuture) {
                             return (
@@ -833,7 +841,8 @@ export default function ShowTracker() {
                     </div>
                   )}
                 </Card>
-              ))}
+                  )
+                })}
             </div>
           )}
         </div>

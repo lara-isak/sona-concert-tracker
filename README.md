@@ -5,13 +5,13 @@ A cyberpunk-themed show tracking dashboard built with Next.js and shadcn/ui.
 ## Features
 
 - Track shows with detailed information
-- Filter by city, attendance status, and year
+- Filter by attendance status and year
 - Search functionality across shows, cities, and venues
 - Beautiful cyberpunk-inspired UI with neon accents
 - Responsive design for mobile and desktop
 - **Cloud sync** - Data syncs across all devices and browsers via Supabase
 - Import from Google Sheets CSV
-- Add shows directly in the app
+- Add and edit shows directly in the app
 
 ## Tech Stack
 
