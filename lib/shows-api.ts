@@ -41,6 +41,7 @@ export async function createShow(show: Show): Promise<Show> {
     // Transform back to Show format
     const dbShow = data.show
     return {
+      id: dbShow.id,
       show: dbShow.show,
       date: dbShow.date,
       city: dbShow.city,
@@ -81,6 +82,35 @@ export async function importShows(shows: Show[]): Promise<void> {
     await response.json()
   } catch (error) {
     console.error("Error importing shows:", error)
+    throw error
+  }
+}
+
+export async function updateShow(show: Show & { id: string }): Promise<Show> {
+  try {
+    const response = await fetch(API_BASE, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(show),
+    })
+
+    if (!response.ok) {
+      let errorMessage = "Failed to update show"
+      try {
+        const error = await response.json()
+        errorMessage = error.error || errorMessage
+      } catch {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`
+      }
+      throw new Error(errorMessage)
+    }
+
+    const data = await response.json()
+    return data.show
+  } catch (error) {
+    console.error("Error updating show:", error)
     throw error
   }
 }

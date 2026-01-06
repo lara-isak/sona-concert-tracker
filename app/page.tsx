@@ -5,9 +5,9 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Search, MapPin, Ticket, FileText, Plus, Upload, X } from "lucide-react"
+import { Search, MapPin, Ticket, FileText, Plus, Upload, X, Edit } from "lucide-react"
 import { parseGoogleSheetsCSV, getDayOfWeek, type Show } from "@/lib/shows"
-import { fetchShows, createShow, importShows } from "@/lib/shows-api"
+import { fetchShows, createShow, importShows, updateShow } from "@/lib/shows-api"
 
 export default function ShowTracker() {
   const [shows, setShows] = useState<Show[]>([])
@@ -16,6 +16,7 @@ export default function ShowTracker() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
   const [showAddForm, setShowAddForm] = useState(false)
   const [showImportForm, setShowImportForm] = useState(false)
+  const [editingShow, setEditingShow] = useState<Show | null>(null)
   const [importText, setImportText] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -189,6 +190,54 @@ export default function ShowTracker() {
     }
   }
 
+  const handleEditShow = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!form || !editingShow || !editingShow.id) return
+
+    try {
+      const formData = new FormData(form)
+      const dateStr = formData.get("date") as string
+      if (!dateStr) {
+        alert("Please select a date.")
+        return
+      }
+
+      const updatedShow: Show & { id: string } = {
+        id: editingShow.id,
+        show: (formData.get("show") as string).trim(),
+        date: dateStr,
+        city: (formData.get("city") as string).trim(),
+        venue: (formData.get("venue") as string).trim(),
+        ticket: (formData.get("ticket") as string) === "YES" ? "YES" : "NO",
+        ticketVendor: (formData.get("ticketVendor") as string).trim(),
+        ticketLocation: (formData.get("ticketLocation") as string).trim(),
+        attendance: (formData.get("attendance") as string) as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
+        note: (formData.get("note") as string)?.trim() || undefined,
+      }
+
+      if (!updatedShow.show || !updatedShow.city || !updatedShow.venue) {
+        alert("Please fill in all required fields (Show, City, Venue).")
+        return
+      }
+
+      try {
+        await updateShow(updatedShow)
+        // Reload shows from API
+        const data = await fetchShows()
+        setShows(data)
+        setEditingShow(null)
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Failed to update show"
+        alert(`Failed to update show: ${errorMessage}`)
+        console.error("Update error:", error)
+      }
+    } catch (error) {
+      alert("Error updating show. Please try again.")
+      console.error("Edit show error:", error)
+    }
+  }
+
   return (
     <div className="flex flex-col md:flex-row h-screen bg-background overflow-hidden">
       {/* Mobile Header */}
@@ -312,7 +361,10 @@ export default function ShowTracker() {
                   Import
                 </Button>
                 <Button
-                  onClick={() => setShowAddForm(!showAddForm)}
+                  onClick={() => {
+                    setShowAddForm(!showAddForm)
+                    setEditingShow(null)
+                  }}
                   variant="default"
                   size="sm"
                   className="font-mono text-xs"
@@ -355,6 +407,97 @@ export default function ShowTracker() {
                   Import Shows
                 </Button>
               </div>
+            </Card>
+          )}
+
+          {/* Edit Show Form */}
+          {editingShow && (
+            <Card className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50">
+              <form onSubmit={handleEditShow} className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold font-mono">Edit Show</h3>
+                  <Button
+                    type="button"
+                    onClick={() => setEditingShow(null)}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Show Name *
+                    </label>
+                    <Input name="show" defaultValue={editingShow.show} required className="font-mono text-base md:text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Date *
+                    </label>
+                    <Input name="date" type="date" defaultValue={editingShow.date} required className="font-mono text-base md:text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">City *</label>
+                    <Input name="city" defaultValue={editingShow.city} required className="font-mono text-base md:text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Venue *
+                    </label>
+                    <Input name="venue" defaultValue={editingShow.venue} required className="font-mono text-base md:text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Ticket (YES/NO)
+                    </label>
+                    <select
+                      name="ticket"
+                      defaultValue={editingShow.ticket}
+                      className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-base md:text-xs"
+                    >
+                      <option value="YES">YES</option>
+                      <option value="NO">NO</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Ticket Vendor
+                    </label>
+                    <Input name="ticketVendor" defaultValue={editingShow.ticketVendor} className="font-mono text-base md:text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Ticket Location
+                    </label>
+                    <Input name="ticketLocation" defaultValue={editingShow.ticketLocation} className="font-mono text-base md:text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
+                      Attendance Status
+                    </label>
+                    <select
+                      name="attendance"
+                      defaultValue={editingShow.attendance}
+                      className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-base md:text-xs"
+                    >
+                      <option value="NOT YET">NOT YET</option>
+                      <option value="YES">YES</option>
+                      <option value="NO">NO</option>
+                      <option value="CANCELLED">CANCELLED</option>
+                      <option value="POSTPONED">POSTPONED</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">Note</label>
+                    <Input name="note" defaultValue={editingShow.note || ""} className="font-mono text-base md:text-xs" />
+                  </div>
+                </div>
+                <Button type="submit" className="font-mono text-xs">
+                  Update Show
+                </Button>
+              </form>
             </Card>
           )}
 
@@ -556,7 +699,7 @@ export default function ShowTracker() {
             <div className="space-y-4">
               {filteredShows.map((show, index) => (
                 <Card
-                  key={index}
+                  key={show.id || index}
                   className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/30 hover:shadow-[0_0_20px_rgba(0,255,255,0.1)] transition-all duration-300"
                 >
                   <div className="flex flex-col gap-4">
@@ -576,7 +719,22 @@ export default function ShowTracker() {
                         </div>
 
                         <div className="flex-1 space-y-2">
-                          <h3 className="text-lg md:text-xl font-bold text-foreground">{show.show}</h3>
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="text-lg md:text-xl font-bold text-foreground">{show.show}</h3>
+                            {show.id && (
+                              <Button
+                                onClick={() => {
+                                  setEditingShow(show)
+                                  setShowAddForm(false)
+                                }}
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
                           <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs md:text-sm text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <MapPin className="w-3 h-3 md:w-4 md:h-4 text-neon-magenta" />

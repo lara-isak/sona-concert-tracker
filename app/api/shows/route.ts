@@ -40,6 +40,7 @@ export async function GET() {
 
     // Transform database format to Show type
     const shows: Show[] = ((data as Database["public"]["Tables"]["shows"]["Row"][]) || []).map((row) => ({
+      id: row.id,
       show: row.show,
       date: row.date,
       city: row.city,
@@ -173,6 +174,72 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error("API error:", error)
     const errorMessage = error instanceof Error ? error.message : "Failed to update shows"
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
+  }
+}
+
+// PATCH - Update a single show
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { id, ...showData }: Show & { id: string } = body
+
+    if (!id) {
+      return NextResponse.json({ error: "Show ID is required" }, { status: 400 })
+    }
+
+    // Validate required fields if provided
+    if (showData.date) {
+      const dateValidation = validateDate(showData.date)
+      if (!dateValidation.valid) {
+        return NextResponse.json({ error: dateValidation.error }, { status: 400 })
+      }
+    }
+
+    // Transform Show type to database format
+    const updateData: Database["public"]["Tables"]["shows"]["Update"] = {}
+    if (showData.show !== undefined) updateData.show = showData.show
+    if (showData.date !== undefined) updateData.date = showData.date
+    if (showData.city !== undefined) updateData.city = showData.city
+    if (showData.venue !== undefined) updateData.venue = showData.venue
+    if (showData.ticket !== undefined) updateData.ticket = showData.ticket
+    if (showData.ticketVendor !== undefined) updateData.ticket_vendor = showData.ticketVendor
+    if (showData.ticketLocation !== undefined) updateData.ticket_location = showData.ticketLocation
+    if (showData.attendance !== undefined) updateData.attendance = showData.attendance
+    if (showData.note !== undefined) updateData.note = showData.note || null
+
+    const { data, error } = await supabase
+      .from("shows")
+      .update(updateData as any)
+      .eq("id", id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Supabase error:", error)
+      return NextResponse.json({ 
+        error: `Failed to update show: ${error.message}${error.details ? ` (Details: ${error.details})` : ""}${error.hint ? ` (Hint: ${error.hint})` : ""}` 
+      }, { status: 500 })
+    }
+
+    // Transform back to Show format
+    const show: Show = {
+      id: data.id,
+      show: data.show,
+      date: data.date,
+      city: data.city,
+      venue: data.venue,
+      ticket: data.ticket,
+      ticketVendor: data.ticket_vendor,
+      ticketLocation: data.ticket_location,
+      attendance: data.attendance,
+      note: data.note || undefined,
+    }
+
+    return NextResponse.json({ show }, { status: 200 })
+  } catch (error) {
+    console.error("API error:", error)
+    const errorMessage = error instanceof Error ? error.message : "Failed to update show"
     return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

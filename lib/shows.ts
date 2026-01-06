@@ -1,4 +1,5 @@
 export type Show = {
+  id?: string
   show: string
   date: string
   city: string
