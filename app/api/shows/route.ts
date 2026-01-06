@@ -197,7 +197,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Transform Show type to database format
-    const updateData: Database["public"]["Tables"]["shows"]["Update"] = {}
+    const updateData: Record<string, any> = {}
     if (showData.show !== undefined) updateData.show = showData.show
     if (showData.date !== undefined) updateData.date = showData.date
     if (showData.city !== undefined) updateData.city = showData.city
