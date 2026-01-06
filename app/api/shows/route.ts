@@ -3,6 +3,29 @@ import { supabase } from "@/lib/supabase"
 import type { Show } from "@/lib/shows"
 import type { Database } from "@/lib/database.types"
 
+type DbRow = Database["public"]["Tables"]["shows"]["Row"]
+
+// Helper function to transform database row to Show type
+function dbRowToShow(row: DbRow): Show {
+  return {
+    id: row.id,
+    show: row.show,
+    date: row.date,
+    city: row.city,
+    venue: row.venue,
+    ticket: row.ticket,
+    ticketVendor: row.ticket_vendor,
+    ticketLocation: row.ticket_location,
+    attendance: row.attendance,
+    note: row.note || undefined,
+  }
+}
+
+// Helper function to format Supabase error messages
+function formatSupabaseError(error: any): string {
+  return `${error.message}${error.details ? ` (Details: ${error.details})` : ""}${error.hint ? ` (Hint: ${error.hint})` : ""}`
+}
+
 // Helper function to validate date format and value
 function validateDate(date: string, showName?: string): { valid: boolean; error?: string } {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -39,18 +62,7 @@ export async function GET() {
     }
 
     // Transform database format to Show type
-    const shows: Show[] = ((data as Database["public"]["Tables"]["shows"]["Row"][]) || []).map((row) => ({
-      id: row.id,
-      show: row.show,
-      date: row.date,
-      city: row.city,
-      venue: row.venue,
-      ticket: row.ticket,
-      ticketVendor: row.ticket_vendor,
-      ticketLocation: row.ticket_location,
-      attendance: row.attendance,
-      note: row.note || undefined,
-    }))
+    const shows: Show[] = ((data as DbRow[]) || []).map(dbRowToShow)
 
     return NextResponse.json({ shows })
   } catch (error) {
@@ -63,33 +75,33 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const show: Show = body
+    const showData: Show = body
 
     // Validate required fields
-    if (!show.show || !show.date || !show.city || !show.venue) {
+    if (!showData.show || !showData.date || !showData.city || !showData.venue) {
       return NextResponse.json(
-        { error: `Missing required fields: show=${show.show}, date=${show.date}, city=${show.city}, venue=${show.venue}` },
+        { error: `Missing required fields: show=${showData.show}, date=${showData.date}, city=${showData.city}, venue=${showData.venue}` },
         { status: 400 }
       )
     }
 
     // Validate date format and value
-    const dateValidation = validateDate(show.date)
+    const dateValidation = validateDate(showData.date)
     if (!dateValidation.valid) {
       return NextResponse.json({ error: dateValidation.error }, { status: 400 })
     }
 
     // Transform Show type to database format
     const insertData: Database["public"]["Tables"]["shows"]["Insert"] = {
-      show: show.show,
-      date: show.date,
-      city: show.city,
-      venue: show.venue,
-      ticket: show.ticket,
-      ticket_vendor: show.ticketVendor,
-      ticket_location: show.ticketLocation,
-      attendance: show.attendance,
-      note: show.note || null,
+      show: showData.show,
+      date: showData.date,
+      city: showData.city,
+      venue: showData.venue,
+      ticket: showData.ticket,
+      ticket_vendor: showData.ticketVendor,
+      ticket_location: showData.ticketLocation,
+      attendance: showData.attendance,
+      note: showData.note || null,
     }
     
     const { data, error } = await supabase
@@ -101,11 +113,13 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("Supabase error:", error)
       return NextResponse.json({ 
-        error: `Failed to create show: ${error.message}${error.details ? ` (Details: ${error.details})` : ""}${error.hint ? ` (Hint: ${error.hint})` : ""}` 
+        error: `Failed to create show: ${formatSupabaseError(error)}` 
       }, { status: 500 })
     }
 
-    return NextResponse.json({ show: data }, { status: 201 })
+    // Transform database format to Show type
+    const show = dbRowToShow(data as DbRow)
+    return NextResponse.json({ show }, { status: 201 })
   } catch (error) {
     console.error("API error:", error)
     const errorMessage = error instanceof Error ? error.message : "Failed to create show"
@@ -166,7 +180,7 @@ export async function PUT(request: NextRequest) {
     if (error) {
       console.error("Supabase insert error:", error)
       return NextResponse.json({ 
-        error: `Failed to insert shows: ${error.message}${error.details ? ` (Details: ${error.details})` : ""}${error.hint ? ` (Hint: ${error.hint})` : ""}` 
+        error: `Failed to insert shows: ${formatSupabaseError(error)}` 
       }, { status: 500 })
     }
 
@@ -197,44 +211,46 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Transform Show type to database format
-    const updateData: Partial<Database["public"]["Tables"]["shows"]["Update"]> = {}
-    if (showData.show !== undefined) updateData.show = showData.show
-    if (showData.date !== undefined) updateData.date = showData.date
-    if (showData.city !== undefined) updateData.city = showData.city
-    if (showData.venue !== undefined) updateData.venue = showData.venue
-    if (showData.ticket !== undefined) updateData.ticket = showData.ticket
-    if (showData.ticketVendor !== undefined) updateData.ticket_vendor = showData.ticketVendor
-    if (showData.ticketLocation !== undefined) updateData.ticket_location = showData.ticketLocation
-    if (showData.attendance !== undefined) updateData.attendance = showData.attendance
-    if (showData.note !== undefined) updateData.note = showData.note || null
+    // Build update object with only defined fields
+    const updateData: Database["public"]["Tables"]["shows"]["Update"] = {
+      ...(showData.show !== undefined && { show: showData.show }),
+      ...(showData.date !== undefined && { date: showData.date }),
+      ...(showData.city !== undefined && { city: showData.city }),
+      ...(showData.venue !== undefined && { venue: showData.venue }),
+      ...(showData.ticket !== undefined && { ticket: showData.ticket }),
+      ...(showData.ticketVendor !== undefined && { ticket_vendor: showData.ticketVendor }),
+      ...(showData.ticketLocation !== undefined && { ticket_location: showData.ticketLocation }),
+      ...(showData.attendance !== undefined && { attendance: showData.attendance }),
+      ...(showData.note !== undefined && { note: showData.note || null }),
+    }
 
-    const { data, error } = await supabase
+    // Type assertion needed due to Supabase's type inference limitations with conditional object spreads
+    const result = await supabase
       .from("shows")
-      .update(updateData as any)
+      // @ts-ignore - Supabase type inference issue: update method incorrectly infers 'never' type
+      .update(updateData)
       .eq("id", id)
       .select()
       .single()
 
+    const { data, error } = result as {
+      data: DbRow | null
+      error: any
+    }
+
     if (error) {
       console.error("Supabase error:", error)
       return NextResponse.json({ 
-        error: `Failed to update show: ${error.message}${error.details ? ` (Details: ${error.details})` : ""}${error.hint ? ` (Hint: ${error.hint})` : ""}` 
+        error: `Failed to update show: ${formatSupabaseError(error)}` 
       }, { status: 500 })
     }
 
-    // Transform back to Show format
-    const show: Show = {
-      id: data.id,
-      show: data.show,
-      date: data.date,
-      city: data.city,
-      venue: data.venue,
-      ticket: data.ticket,
-      ticketVendor: data.ticket_vendor,
-      ticketLocation: data.ticket_location,
-      attendance: data.attendance,
-      note: data.note || undefined,
+    if (!data) {
+      return NextResponse.json({ error: "Show not found" }, { status: 404 })
     }
+
+    // Transform back to Show format
+    const show = dbRowToShow(data)
 
     return NextResponse.json({ show }, { status: 200 })
   } catch (error) {
