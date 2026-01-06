@@ -14,7 +14,7 @@ export default function ShowTracker() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCity, setSelectedCity] = useState("All")
   const [attendedFilter, setAttendedFilter] = useState<"All" | "Attended" | "Not Attended" | "Upcoming">("All")
-  const [selectedYear, setSelectedYear] = useState("2025")
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
   const [showAddForm, setShowAddForm] = useState(false)
   const [showImportForm, setShowImportForm] = useState(false)
   const [importText, setImportText] = useState("")
