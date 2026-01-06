@@ -55,6 +55,13 @@ export default function ShowTracker() {
     return Array.from(yearSet).sort()
   }, [shows])
 
+  // Memoize today's date to avoid recalculating
+  const today = useMemo(() => {
+    const date = new Date()
+    date.setHours(0, 0, 0, 0)
+    return date
+  }, [])
+
   const filteredShows = useMemo(() => {
     return shows.filter((show) => {
       const matchesSearch =
@@ -83,14 +90,7 @@ export default function ShowTracker() {
 
       return matchesSearch && matchesAttended && matchesYear
     })
-  }, [shows, searchQuery, attendedFilter, selectedYear])
-
-  // Memoize today's date to avoid recalculating
-  const today = useMemo(() => {
-    const date = new Date()
-    date.setHours(0, 0, 0, 0)
-    return date
-  }, [])
+  }, [shows, searchQuery, attendedFilter, selectedYear, today])
 
   const stats = useMemo(() => {
     const yearShows = shows.filter((show) => show.date.startsWith(selectedYear))
