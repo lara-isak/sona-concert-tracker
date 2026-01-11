@@ -9,10 +9,113 @@ import { Search, MapPin, Ticket, FileText, Plus, Upload, X, Edit } from "lucide-
 import { parseGoogleSheetsCSV, getDayOfWeek, type Show } from "@/lib/shows"
 import { fetchShows, createShow, importShows, updateShow } from "@/lib/shows-api"
 
+// Constants
+const ATTENDANCE_STATUSES = ["NOT YET", "YES", "NO", "CANCELLED", "POSTPONED"] as const
+const ATTENDANCE_FILTERS = ["All", "Attended", "Not Attended", "Upcoming"] as const
+
+// Helper function to extract show data from form
+function extractShowFromForm(form: HTMLFormElement): Omit<Show, "id"> | null {
+  const formData = new FormData(form)
+  const dateStr = formData.get("date") as string
+  if (!dateStr) {
+    alert("Please select a date.")
+    return null
+  }
+
+  const show: Omit<Show, "id"> = {
+    show: (formData.get("show") as string).trim(),
+    date: dateStr,
+    city: (formData.get("city") as string).trim(),
+    venue: (formData.get("venue") as string).trim(),
+    ticket: (formData.get("ticket") as string) === "YES" ? "YES" : "NO",
+    ticketVendor: (formData.get("ticketVendor") as string).trim(),
+    ticketLocation: (formData.get("ticketLocation") as string).trim(),
+    attendance: (formData.get("attendance") as string) as Show["attendance"],
+    note: (formData.get("note") as string)?.trim() || undefined,
+  }
+
+  if (!show.show || !show.city || !show.venue) {
+    alert("Please fill in all required fields (Show, City, Venue).")
+    return null
+  }
+
+  return show
+}
+
+// Helper function to normalize date (set hours to 0)
+function normalizeDate(date: Date | string): Date {
+  const d = typeof date === "string" ? new Date(date) : date
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+// Helper function to check if show is upcoming
+function isUpcoming(show: Show, today: Date): boolean {
+  if (show.attendance !== "NOT YET") return false
+  const showDate = normalizeDate(show.date)
+  return showDate >= today
+}
+
+// Attendance Badge Component
+function AttendanceBadge({ show, today }: { show: Show; today: Date }) {
+  if (show.attendance === "YES") {
+    return (
+      <Badge variant="outline" className="border-green-500/50 text-green-400 bg-green-500/10 font-mono text-xs shadow-[0_0_10px_rgba(34,197,94,0.2)]">
+        ATTENDED
+      </Badge>
+    )
+  }
+
+  if (show.attendance === "NO") {
+    return (
+      <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
+        NOT ATTENDED
+      </Badge>
+    )
+  }
+
+  if (show.attendance === "CANCELLED") {
+    return (
+      <Badge variant="outline" className="border-destructive/50 text-destructive bg-destructive/10 font-mono text-xs">
+        CANCELLED
+      </Badge>
+    )
+  }
+
+  if (show.attendance === "POSTPONED") {
+    return (
+      <Badge variant="outline" className="border-neon-orange/50 text-neon-orange bg-neon-orange/10 font-mono text-xs">
+        POSTPONED
+      </Badge>
+    )
+  }
+
+  if (show.attendance === "NOT YET") {
+    const showDate = normalizeDate(show.date)
+    const isTodayOrFuture = showDate >= today
+
+    if (isTodayOrFuture) {
+      return (
+        <Badge className="bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50 shadow-[0_0_10px_rgba(0,255,255,0.2)] font-mono text-xs">
+          UPCOMING
+        </Badge>
+      )
+    } else {
+      return (
+        <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
+          NOT ATTENDED
+        </Badge>
+      )
+    }
+  }
+
+  return null
+}
+
 export default function ShowTracker() {
   const [shows, setShows] = useState<Show[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [attendedFilter, setAttendedFilter] = useState<"All" | "Attended" | "Not Attended" | "Upcoming">("All")
+  const [attendedFilter, setAttendedFilter] = useState<(typeof ATTENDANCE_FILTERS)[number]>("All")
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
   const [showAddForm, setShowAddForm] = useState(false)
   const [showImportForm, setShowImportForm] = useState(false)
@@ -63,29 +166,22 @@ export default function ShowTracker() {
   }, [])
 
   const filteredShows = useMemo(() => {
+    const searchLower = searchQuery.toLowerCase()
     return shows.filter((show) => {
       const matchesSearch =
-        show.show.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        show.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        show.venue.toLowerCase().includes(searchQuery.toLowerCase())
+        show.show.toLowerCase().includes(searchLower) ||
+        show.city.toLowerCase().includes(searchLower) ||
+        show.venue.toLowerCase().includes(searchLower)
 
       const isAttended = show.attendance === "YES"
       const isNotAttended = show.attendance === "NO" || show.attendance === "CANCELLED" || show.attendance === "POSTPONED"
-      const isNotYet = show.attendance === "NOT YET"
-      
-      // For "NOT YET", check if it's upcoming (today or future)
-      let isUpcoming = false
-      if (isNotYet) {
-        const showDate = new Date(show.date)
-        showDate.setHours(0, 0, 0, 0)
-        isUpcoming = showDate >= today
-      }
+      const showIsUpcoming = isUpcoming(show, today)
 
       const matchesAttended =
         attendedFilter === "All" ||
         (attendedFilter === "Attended" && isAttended) ||
         (attendedFilter === "Not Attended" && isNotAttended) ||
-        (attendedFilter === "Upcoming" && isUpcoming)
+        (attendedFilter === "Upcoming" && showIsUpcoming)
       const matchesYear = show.date.startsWith(selectedYear)
 
       return matchesSearch && matchesAttended && matchesYear
@@ -95,14 +191,7 @@ export default function ShowTracker() {
   const stats = useMemo(() => {
     const yearShows = shows.filter((show) => show.date.startsWith(selectedYear))
     const attended = yearShows.filter((show) => show.attendance === "YES").length
-    const upcoming = yearShows.filter((show) => {
-      if (show.attendance === "NOT YET") {
-        const showDate = new Date(show.date)
-        showDate.setHours(0, 0, 0, 0)
-        return showDate >= today
-      }
-      return false
-    }).length
+    const upcoming = yearShows.filter((show) => isUpcoming(show, today)).length
 
     return {
       total: yearShows.length,
@@ -147,97 +236,44 @@ export default function ShowTracker() {
     const form = e.currentTarget
     if (!form) return
 
+    const newShow = extractShowFromForm(form)
+    if (!newShow) return
+
     try {
-      const formData = new FormData(form)
-      const dateStr = formData.get("date") as string
-      if (!dateStr) {
-        alert("Please select a date.")
-        return
-      }
-
-      const newShow: Show = {
-        show: (formData.get("show") as string).trim(),
-        date: dateStr,
-        city: (formData.get("city") as string).trim(),
-        venue: (formData.get("venue") as string).trim(),
-        ticket: (formData.get("ticket") as string) === "YES" ? "YES" : "NO",
-        ticketVendor: (formData.get("ticketVendor") as string).trim(),
-        ticketLocation: (formData.get("ticketLocation") as string).trim(),
-        attendance: (formData.get("attendance") as string) as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
-        note: (formData.get("note") as string)?.trim() || undefined,
-      }
-
-      if (!newShow.show || !newShow.city || !newShow.venue) {
-        alert("Please fill in all required fields (Show, City, Venue).")
-        return
-      }
-
-      try {
-        await createShow(newShow)
-        // Reload shows from API
-        const data = await fetchShows()
-        setShows(data)
-        // Reset form if it still exists
-        if (form) {
-          form.reset()
-        }
-        setShowAddForm(false)
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Failed to save show"
-        alert(`Failed to save show: ${errorMessage}`)
-        console.error("Save error:", error)
-      }
+      await createShow(newShow)
+      const data = await fetchShows()
+      setShows(data)
+      form.reset()
+      setShowAddForm(false)
     } catch (error) {
-      alert("Error adding show. Please try again.")
-      console.error("Add show error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to save show"
+      alert(`Failed to save show: ${errorMessage}`)
+      console.error("Save error:", error)
     }
   }
 
   const handleEditShow = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const form = e.currentTarget
-    if (!form || !editingShow || !editingShow.id) return
+    if (!form || !editingShow?.id) return
+
+    const showData = extractShowFromForm(form)
+    if (!showData) return
+
+    const updatedShow: Show & { id: string } = {
+      ...showData,
+      id: editingShow.id,
+    }
 
     try {
-      const formData = new FormData(form)
-      const dateStr = formData.get("date") as string
-      if (!dateStr) {
-        alert("Please select a date.")
-        return
-      }
-
-      const updatedShow: Show & { id: string } = {
-        id: editingShow.id,
-        show: (formData.get("show") as string).trim(),
-        date: dateStr,
-        city: (formData.get("city") as string).trim(),
-        venue: (formData.get("venue") as string).trim(),
-        ticket: (formData.get("ticket") as string) === "YES" ? "YES" : "NO",
-        ticketVendor: (formData.get("ticketVendor") as string).trim(),
-        ticketLocation: (formData.get("ticketLocation") as string).trim(),
-        attendance: (formData.get("attendance") as string) as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
-        note: (formData.get("note") as string)?.trim() || undefined,
-      }
-
-      if (!updatedShow.show || !updatedShow.city || !updatedShow.venue) {
-        alert("Please fill in all required fields (Show, City, Venue).")
-        return
-      }
-
-      try {
-        await updateShow(updatedShow)
-        // Reload shows from API
-        const data = await fetchShows()
-        setShows(data)
-        setEditingShow(null)
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Failed to update show"
-        alert(`Failed to update show: ${errorMessage}`)
-        console.error("Update error:", error)
-      }
+      await updateShow(updatedShow)
+      const data = await fetchShows()
+      setShows(data)
+      setEditingShow(null)
     } catch (error) {
-      alert("Error updating show. Please try again.")
-      console.error("Edit show error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to update show"
+      alert(`Failed to update show: ${errorMessage}`)
+      console.error("Update error:", error)
     }
   }
 
@@ -416,8 +452,8 @@ export default function ShowTracker() {
 
           {/* Edit Show Form */}
           {editingShow && (
-            <Card className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50">
-              <form onSubmit={handleEditShow} className="space-y-4">
+            <Card key={`edit-card-${editingShow.id || editingShow.date + editingShow.show}`} className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-border/50">
+              <form key={`edit-form-${editingShow.id || editingShow.date + editingShow.show}`} onSubmit={handleEditShow} className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-bold font-mono">Edit Show</h3>
                   <Button
@@ -435,23 +471,23 @@ export default function ShowTracker() {
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
                       Show Name *
                     </label>
-                    <Input name="show" defaultValue={editingShow.show} required className="font-mono text-base md:text-xs" />
+                    <Input name="show" key={`show-${editingShow.id || editingShow.date}`} defaultValue={editingShow.show} required className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
                       Date *
                     </label>
-                    <Input name="date" type="date" defaultValue={editingShow.date} required className="font-mono text-base md:text-xs" />
+                    <Input name="date" type="date" key={`date-${editingShow.id || editingShow.date}`} defaultValue={editingShow.date} required className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">City *</label>
-                    <Input name="city" defaultValue={editingShow.city} required className="font-mono text-base md:text-xs" />
+                    <Input name="city" key={`city-${editingShow.id || editingShow.date}`} defaultValue={editingShow.city} required className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
                       Venue *
                     </label>
-                    <Input name="venue" defaultValue={editingShow.venue} required className="font-mono text-base md:text-xs" />
+                    <Input name="venue" key={`venue-${editingShow.id || editingShow.date}`} defaultValue={editingShow.venue} required className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
@@ -459,6 +495,7 @@ export default function ShowTracker() {
                     </label>
                     <select
                       name="ticket"
+                      key={`ticket-${editingShow.id || editingShow.date}`}
                       defaultValue={editingShow.ticket}
                       className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-base md:text-xs"
                     >
@@ -470,13 +507,13 @@ export default function ShowTracker() {
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
                       Ticket Vendor
                     </label>
-                    <Input name="ticketVendor" defaultValue={editingShow.ticketVendor} className="font-mono text-base md:text-xs" />
+                    <Input name="ticketVendor" key={`ticketVendor-${editingShow.id || editingShow.date}`} defaultValue={editingShow.ticketVendor} className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
                       Ticket Location
                     </label>
-                    <Input name="ticketLocation" defaultValue={editingShow.ticketLocation} className="font-mono text-base md:text-xs" />
+                    <Input name="ticketLocation" key={`ticketLocation-${editingShow.id || editingShow.date}`} defaultValue={editingShow.ticketLocation} className="font-mono text-base md:text-xs" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
@@ -484,19 +521,20 @@ export default function ShowTracker() {
                     </label>
                     <select
                       name="attendance"
+                      key={`attendance-${editingShow.id || editingShow.date}`}
                       defaultValue={editingShow.attendance}
                       className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-base md:text-xs"
                     >
-                      <option value="NOT YET">NOT YET</option>
-                      <option value="YES">YES</option>
-                      <option value="NO">NO</option>
-                      <option value="CANCELLED">CANCELLED</option>
-                      <option value="POSTPONED">POSTPONED</option>
+                      {ATTENDANCE_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">Note</label>
-                    <Input name="note" defaultValue={editingShow.note || ""} className="font-mono text-base md:text-xs" />
+                    <Input name="note" key={`note-${editingShow.id || editingShow.date}`} defaultValue={editingShow.note || ""} className="font-mono text-base md:text-xs" />
                   </div>
                 </div>
                 <Button type="submit" className="font-mono text-xs">
@@ -577,11 +615,11 @@ export default function ShowTracker() {
                       name="attendance"
                       className="w-full px-3 py-2 rounded-md bg-input/50 border border-border/50 text-foreground focus:border-primary/50 focus:outline-none font-mono text-base md:text-xs"
                     >
-                      <option value="NOT YET">NOT YET</option>
-                      <option value="YES">YES</option>
-                      <option value="NO">NO</option>
-                      <option value="CANCELLED">CANCELLED</option>
-                      <option value="POSTPONED">POSTPONED</option>
+                      {ATTENDANCE_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-2 md:col-span-2">
@@ -616,7 +654,7 @@ export default function ShowTracker() {
                 <div className="space-y-2">
                   <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono">Attended</label>
                   <div className="flex gap-2">
-                    {(["All", "Attended", "Not Attended", "Upcoming"] as const).map((filter) => (
+                    {ATTENDANCE_FILTERS.map((filter) => (
                       <Button
                         key={filter}
                         onClick={() => setAttendedFilter(filter)}
@@ -704,8 +742,7 @@ export default function ShowTracker() {
           ) : (
             <div className="space-y-4">
               {filteredShows.map((show, index) => {
-                // Parse date once per show for better performance
-                const showDate = new Date(show.date)
+                const showDate = normalizeDate(show.date)
                 return (
                   <Card
                     key={show.id || index}
@@ -733,7 +770,8 @@ export default function ShowTracker() {
                               {show.id && (
                                 <Button
                                   onClick={() => {
-                                    setEditingShow(show)
+                                    // Create a fresh copy to ensure React sees it as a new object
+                                    setEditingShow({ ...show })
                                     setShowAddForm(false)
                                   }}
                                   variant="ghost"
@@ -758,55 +796,7 @@ export default function ShowTracker() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      {(() => {
-                        if (show.attendance === "YES") {
-                          return (
-                            <Badge variant="outline" className="border-green-500/50 text-green-400 bg-green-500/10 font-mono text-xs shadow-[0_0_10px_rgba(34,197,94,0.2)]">
-                              ATTENDED
-                            </Badge>
-                          )
-                        } else if (show.attendance === "NO") {
-                          return (
-                            <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
-                              NOT ATTENDED
-                            </Badge>
-                          )
-                        } else if (show.attendance === "CANCELLED") {
-                          return (
-                            <Badge variant="outline" className="border-destructive/50 text-destructive bg-destructive/10 font-mono text-xs">
-                              CANCELLED
-                            </Badge>
-                          )
-                        } else if (show.attendance === "POSTPONED") {
-                          return (
-                            <Badge variant="outline" className="border-neon-orange/50 text-neon-orange bg-neon-orange/10 font-mono text-xs">
-                              POSTPONED
-                            </Badge>
-                          )
-                        } else if (show.attendance === "NOT YET") {
-                          // Check if date is today or in the future
-                          const showDateForCheck = new Date(show.date)
-                          showDateForCheck.setHours(0, 0, 0, 0)
-                          const isTodayOrFuture = showDateForCheck >= today
-
-                          if (isTodayOrFuture) {
-                            return (
-                              <Badge className="bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50 shadow-[0_0_10px_rgba(0,255,255,0.2)] font-mono text-xs">
-                                UPCOMING
-                              </Badge>
-                            )
-                          } else {
-                            // Past date with "NOT YET" should show as NOT ATTENDED
-                            return (
-                              <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
-                                NOT ATTENDED
-                              </Badge>
-                            )
-                          }
-                        }
-                        // Fallback
-                        return null
-                      })()}
+                      <AttendanceBadge show={show} today={today} />
                       {show.ticket === "YES" && (
                         <>
                           {show.ticketVendor && show.ticketVendor.trim() !== "" && (

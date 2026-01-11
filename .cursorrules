@@ -1,0 +1,28 @@
+# Cursor AI Rules for SONA Project
+
+## Code Review Before Push
+When the user asks "anything to optimize before i push changes to github" or similar, perform a comprehensive code review:
+
+1. **Check for duplicate code** - Look for repeated logic, functions, or patterns
+2. **Review constant organization** - Ensure constants are properly organized and not duplicated
+3. **Performance optimizations** - Check for:
+   - Unnecessary re-renders
+   - Missing memoization opportunities
+   - Inefficient loops or filters
+   - Date calculations that could be memoized
+4. **Code structure** - Look for:
+   - Functions that could be extracted
+   - Components that could be split
+   - Better organization of imports
+5. **Type safety** - Ensure proper TypeScript usage
+6. **Best practices** - Follow React/Next.js best practices
+
+## Optimization Checklist
+- [ ] Remove duplicate code/logic
+- [ ] Organize constants and imports
+- [ ] Add memoization where beneficial
+- [ ] Optimize date calculations
+- [ ] Check for unused variables/imports
+- [ ] Review component structure
+- [ ] Verify type safety
+- [ ] Check for performance bottlenecks

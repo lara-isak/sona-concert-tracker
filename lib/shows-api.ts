@@ -2,6 +2,16 @@ import type { Show } from "./shows"
 
 const API_BASE = "/api/shows"
 
+// Helper function to extract error message from response
+async function getErrorMessage(response: Response, defaultMessage: string): Promise<string> {
+  try {
+    const error = await response.json()
+    return error.error || defaultMessage
+  } catch {
+    return `HTTP ${response.status}: ${response.statusText}`
+  }
+}
+
 export async function fetchShows(): Promise<Show[]> {
   try {
     const response = await fetch(API_BASE)
@@ -27,14 +37,7 @@ export async function createShow(show: Show): Promise<Show> {
     })
 
     if (!response.ok) {
-      let errorMessage = "Failed to create show"
-      try {
-        const error = await response.json()
-        errorMessage = error.error || errorMessage
-      } catch {
-        errorMessage = `HTTP ${response.status}: ${response.statusText}`
-      }
-      throw new Error(errorMessage)
+      throw new Error(await getErrorMessage(response, "Failed to create show"))
     }
 
     const data = await response.json()
@@ -69,14 +72,7 @@ export async function importShows(shows: Show[]): Promise<void> {
     })
 
     if (!response.ok) {
-      let errorMessage = "Failed to import shows"
-      try {
-        const error = await response.json()
-        errorMessage = error.error || errorMessage
-      } catch {
-        errorMessage = `HTTP ${response.status}: ${response.statusText}`
-      }
-      throw new Error(errorMessage)
+      throw new Error(await getErrorMessage(response, "Failed to import shows"))
     }
 
     await response.json()
@@ -97,14 +93,7 @@ export async function updateShow(show: Show & { id: string }): Promise<Show> {
     })
 
     if (!response.ok) {
-      let errorMessage = "Failed to update show"
-      try {
-        const error = await response.json()
-        errorMessage = error.error || errorMessage
-      } catch {
-        errorMessage = `HTTP ${response.status}: ${response.statusText}`
-      }
-      throw new Error(errorMessage)
+      throw new Error(await getErrorMessage(response, "Failed to update show"))
     }
 
     const data = await response.json()
