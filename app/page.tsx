@@ -809,17 +809,19 @@ export default function ShowTracker() {
                       })()}
                       {show.ticket === "YES" && (
                         <>
-                          <Badge
-                            variant="outline"
-                            className="border-neon-purple/50 text-neon-purple bg-neon-purple/10 font-mono text-xs"
-                          >
-                            <Ticket className="w-3 h-3 mr-1" />
-                            {show.ticketVendor}
-                          </Badge>
-                          {show.ticketLocation && show.ticketLocation !== "N/A" && (
-                          <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
-                            {show.ticketLocation}
-                          </Badge>
+                          {show.ticketVendor && show.ticketVendor.trim() !== "" && (
+                            <Badge
+                              variant="outline"
+                              className="border-neon-purple/50 text-neon-purple bg-neon-purple/10 font-mono text-xs"
+                            >
+                              <Ticket className="w-3 h-3 mr-1" />
+                              {show.ticketVendor}
+                            </Badge>
+                          )}
+                          {show.ticketLocation && show.ticketLocation.trim() !== "" && show.ticketLocation !== "N/A" && (
+                            <Badge variant="outline" className="border-border/50 text-muted-foreground font-mono text-xs">
+                              {show.ticketLocation}
+                            </Badge>
                           )}
                         </>
                       )}
