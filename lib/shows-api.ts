@@ -114,4 +114,3 @@ export async function updateShow(show: Show & { id: string }): Promise<Show> {
     throw error
   }
 }
-

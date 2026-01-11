@@ -91,6 +91,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: dateValidation.error }, { status: 400 })
     }
 
+    // Auto-set attendance to "YES" for past dates if not explicitly set to something else
+    let attendance = showData.attendance
+    if (attendance === "NOT YET" || !attendance) {
+      const showDate = new Date(showData.date)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      showDate.setHours(0, 0, 0, 0)
+      // If the event date is in the past, mark as "Attended" by default
+      if (showDate < today) {
+        attendance = "YES"
+      } else {
+        attendance = attendance || "NOT YET"
+      }
+    }
+
     // Transform Show type to database format
     const insertData: Database["public"]["Tables"]["shows"]["Insert"] = {
       show: showData.show,
@@ -100,7 +115,7 @@ export async function POST(request: NextRequest) {
       ticket: showData.ticket,
       ticket_vendor: showData.ticketVendor,
       ticket_location: showData.ticketLocation,
-      attendance: showData.attendance,
+      attendance: attendance as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
       note: showData.note || null,
     }
     
@@ -259,4 +274,3 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
-
