@@ -18,6 +18,7 @@ function dbRowToShow(row: DbRow): Show {
     ticketLocation: row.ticket_location,
     attendance: row.attendance,
     note: row.note || undefined,
+    qrCodeUrl: row.qr_code_url || undefined,
   }
 }
 
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
       ticket_location: showData.ticketLocation,
       attendance: attendance as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
       note: showData.note || null,
+      qr_code_url: showData.qrCodeUrl || null,
     }
     
     const { data, error } = await supabase
@@ -188,6 +190,7 @@ export async function PUT(request: NextRequest) {
       ticket_location: show.ticketLocation,
       attendance: show.attendance,
       note: show.note || null,
+      qr_code_url: show.qrCodeUrl || null,
     }))
 
     const { data, error } = await supabase.from("shows").insert(showsToInsert as any).select()
@@ -237,6 +240,7 @@ export async function PATCH(request: NextRequest) {
       ...(showData.ticketLocation !== undefined && { ticket_location: showData.ticketLocation }),
       ...(showData.attendance !== undefined && { attendance: showData.attendance }),
       ...(showData.note !== undefined && { note: showData.note || null }),
+      ...(showData.qrCodeUrl !== undefined && { qr_code_url: showData.qrCodeUrl || null }),
     }
 
     // Type assertion needed due to Supabase's type inference limitations with conditional object spreads

@@ -9,6 +9,7 @@ export type Show = {
   ticketLocation: string
   attendance: "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED"
   note?: string
+  qrCodeUrl?: string
 }
 
 // Helper function to get day of week from date

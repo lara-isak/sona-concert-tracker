@@ -54,6 +54,7 @@ export async function createShow(show: Show): Promise<Show> {
       ticketLocation: dbShow.ticket_location,
       attendance: dbShow.attendance,
       note: dbShow.note || undefined,
+      qrCodeUrl: dbShow.qr_code_url || undefined,
     }
   } catch (error) {
     console.error("Error creating show:", error)
