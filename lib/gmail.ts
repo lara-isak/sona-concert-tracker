@@ -86,12 +86,17 @@ function extractDate(body: string, subject: string): string | null {
     if (matches && matches.length > 0) {
       const dateStr = matches[0]
       const date = parseDate(dateStr)
-      if (date) {
-        // Format as YYYY-MM-DD
+      if (date && !isNaN(date.getTime())) {
+        // Validate date is not invalid
         const year = date.getFullYear()
-        const month = String(date.getMonth() + 1).padStart(2, "0")
-        const day = String(date.getDate()).padStart(2, "0")
-        return `${year}-${month}-${day}`
+        const month = date.getMonth() + 1
+        const day = date.getDate()
+        
+        // Check if date components are valid
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day) && year > 1900 && year < 2100) {
+          // Format as YYYY-MM-DD
+          return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+        }
       }
     }
   }
@@ -129,7 +134,13 @@ function parseDate(dateStr: string): Date | null {
   // Try native Date parsing
   const parsed = new Date(dateStr)
   if (!isNaN(parsed.getTime())) {
-    return parsed
+    // Additional validation: check if date components are valid
+    const year = parsed.getFullYear()
+    const month = parsed.getMonth()
+    const day = parsed.getDate()
+    if (!isNaN(year) && !isNaN(month) && !isNaN(day) && year > 1900 && year < 2100) {
+      return parsed
+    }
   }
 
   return null

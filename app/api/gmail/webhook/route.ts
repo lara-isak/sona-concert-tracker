@@ -76,6 +76,17 @@ export async function POST(request: NextRequest) {
         const showData = parseShowDetailsFromEmail(bodyText, subject)
         if (!showData || !showData.show || !showData.date) {
           console.log(`Could not parse show details from email: ${messageId}`)
+          console.log(`Subject: ${subject.substring(0, 100)}`)
+          console.log(`Body preview: ${bodyText.substring(0, 200)}`)
+          continue
+        }
+        
+        // Validate date format before inserting
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+        if (!dateRegex.test(showData.date)) {
+          console.error(`Invalid date format from email ${messageId}: ${showData.date}`)
+          console.log(`Subject: ${subject.substring(0, 100)}`)
+          console.log(`Body preview: ${bodyText.substring(0, 200)}`)
           continue
         }
 
