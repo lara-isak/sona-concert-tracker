@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getGmailClient, getNewMessages, parseShowDetailsFromEmail, extractQRCodeFromEmail } from "@/lib/gmail"
 import { uploadQRCode } from "@/lib/storage"
-import { supabase } from "@/lib/supabase"
+import { getSupabaseServer } from "@/lib/supabase-server"
 import type { Database } from "@/lib/database.types"
 
 /**
@@ -32,6 +32,9 @@ export async function POST(request: NextRequest) {
 
     // Get Gmail client
     const gmail = getGmailClient()
+    
+    // Get Supabase server client
+    const supabase = getSupabaseServer()
 
     // Get the historyId from the notification
     const historyId = notification.historyId
@@ -96,11 +99,12 @@ export async function POST(request: NextRequest) {
             note: `Imported from email: ${subject}`,
           }
 
+          // @ts-ignore - Supabase type inference issue with getSupabaseServer
           const { data: insertedShow, error: insertError } = await supabase
             .from("shows")
-            .insert(tempShowData)
+            .insert(tempShowData as any)
             .select()
-            .single()
+            .single() as { data: Database["public"]["Tables"]["shows"]["Row"] | null; error: any }
 
           if (insertError || !insertedShow) {
             console.error("Error creating show:", insertError)
@@ -112,10 +116,17 @@ export async function POST(request: NextRequest) {
             qrCodeUrl = await uploadQRCode(qrCodeData, insertedShow.id, "image/png")
             
             // Update show with QR code URL
-            await supabase
-              .from("shows")
-              .update({ qr_code_url: qrCodeUrl })
-              .eq("id", insertedShow.id)
+            const updateData: Database["public"]["Tables"]["shows"]["Update"] = {
+              qr_code_url: qrCodeUrl,
+            }
+            const query = supabase.from("shows")
+            // @ts-expect-error - Supabase type inference issue with getSupabaseServer
+            const updateResult: { error: any } = await query.update(updateData as any).eq("id", insertedShow.id)
+            const updateError = updateResult.error
+            
+            if (updateError) {
+              console.error("Error updating show with QR code:", updateError)
+            }
           } catch (uploadError) {
             console.error("Error uploading QR code:", uploadError)
             // Continue even if QR upload fails
@@ -141,11 +152,12 @@ export async function POST(request: NextRequest) {
             note: `Imported from email: ${subject}`,
           }
 
+          // @ts-ignore - Supabase type inference issue with getSupabaseServer
           const { data: insertedShow, error: insertError } = await supabase
             .from("shows")
-            .insert(showDataToInsert)
+            .insert(showDataToInsert as any)
             .select()
-            .single()
+            .single() as { data: Database["public"]["Tables"]["shows"]["Row"] | null; error: any }
 
           if (insertError || !insertedShow) {
             console.error("Error creating show:", insertError)
