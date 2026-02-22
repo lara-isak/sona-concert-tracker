@@ -83,7 +83,6 @@ function isReasonableEventYear(parsedDate: string): boolean {
 
 /** Find first date in text that looks like an event date (year >= current - 1) */
 function extractDate(text: string): string | null {
-
   // EVENTIM/order emails: prefer "Date: Wed, 11.03.2026" (event) over "Order date: 18.02.2026" (order)
   // Match line that starts with "Date:" or "Datum:" (event date), not "Order date"
   const eventDateLabel = text.match(/(?:^|\n)\s*(?:Date|Datum)\s*:\s*([^\n]+)/im)
@@ -155,14 +154,35 @@ function extractEventimArtistCityDate(text: string): {
   city: string
   date: string | null
 } | null {
-  const m = text.match(
-    /^([^,\n]+),\s*([^,\n]+),\s*(\d{1,2}\.\d{1,2}\.\d{4})\s*$/m
-  )
+  // Try full-line match first (plain text), then inline (stripped HTML)
+  const m =
+    text.match(/^([^,\n]+),\s*([^,\n]+),\s*(\d{1,2}\.\d{1,2}\.\d{4})\s*$/m) ??
+    text.match(/([^,\n]+),\s*([^,\n]+),\s*(\d{1,2}\.\d{1,2}\.\d{4})\b/)
   if (!m || !m[1] || !m[2] || !m[3]) return null
   const [, show, city, dateStr] = m
   const parsed = parseDate(dateStr)
   if (!parsed || !isReasonableEventYear(parsed)) return null
   return { show: show.trim().slice(0, 200), city: city.trim(), date: parsed }
+}
+
+/** From "VenueName, Street, PostalCode City" return just venue name (first segment); optionally extract city from last segment. */
+function parseVenueLine(venueLine: string): { venueName: string; cityFromVenue: string | null } {
+  const trimmed = venueLine.trim()
+  if (!trimmed) return { venueName: "Unknown", cityFromVenue: null }
+  const parts = trimmed.split(",").map((p) => p.trim()).filter(Boolean)
+  const venueName = parts[0] ?? trimmed
+  // Last part might be "10999 Berlin" -> city "Berlin"
+  const last = parts[parts.length - 1]
+  const cityFromVenue =
+    last && parts.length > 1 && /^\d{4,5}\s+.+$/.test(last)
+      ? last.replace(/^\d{4,5}\s+/, "").trim()
+      : parts.length > 1
+        ? last ?? null
+        : null
+  return {
+    venueName: venueName.replace(/\s+/g, "").toUpperCase() === "SO36" ? "SO36" : venueName,
+    cityFromVenue: cityFromVenue && cityFromVenue.length <= 50 ? cityFromVenue : null,
+  }
 }
 
 /**
@@ -191,16 +211,18 @@ export function parseShowFromEmail(subject: string, body: string): ParsedShow | 
     "arena",
     "hall",
   ])
-  // EVENTIM venue line can run into next line in HTML (e.g. "Venue: SO 36... Promoter: ..."); trim at "Promoter:"
-  const venueFinal =
-    (venueRaw && venueRaw.split(/\s+Promoter\s*:/i)[0].trim()) || "Unknown"
+  // EVENTIM venue line can run into next line in HTML; trim at "Promoter:". Then use only venue name (first segment), e.g. "SO 36" not full address.
+  const venueLine =
+    venueRaw && venueRaw.split(/\s+Promoter\s*:/i)[0].trim()
+  const { venueName: venueFinal, cityFromVenue } = parseVenueLine(venueLine ?? "")
 
   const cityFromLabel =
     extractLabel(combined, ["city", "stadt", "location"]) ||
     extractLabel(combined, ["ort"])
-  // Prefer EVENTIM "Artist, City, Date" city; reject label value if it looks like footer text (long, contains ?)
+  // Prefer EVENTIM "Artist, City, Date" city, then city from venue line (e.g. "Berlin" from "..., 10999 Berlin"); reject footer-looking label.
   const cityFinal =
     (eventimFromBody ? eventimFromBody.city : null) ||
+    cityFromVenue ||
     (cityFromLabel &&
     cityFromLabel.length <= 80 &&
     !cityFromLabel.includes("?") &&

@@ -88,13 +88,14 @@ export async function POST(request: NextRequest) {
     showDate.setHours(0, 0, 0, 0)
     const attendance = showDate < today ? "YES" : "NOT YET"
 
+    const isEventim = /EVENTIM/i.test(subject)
     const insertData: Database["public"]["Tables"]["shows"]["Insert"] = {
       show: parsed.show,
       date: parsed.date,
       city: parsed.city,
       venue: parsed.venue,
       ticket: "YES",
-      ticket_vendor: "",
+      ticket_vendor: isEventim ? "Eventim" : "",
       ticket_location: "",
       attendance: attendance as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
       note: null,
