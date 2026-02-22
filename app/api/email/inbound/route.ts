@@ -68,8 +68,13 @@ export async function POST(request: NextRequest) {
 
     const subject = email.subject ?? ""
     const body = email.text ?? email.html ?? ""
+    const bodyPreview = body.slice(0, 500).replace(/\s+/g, " ")
     const parsed = parseShowFromEmail(subject, body)
     if (!parsed) {
+      console.warn("Inbound: parse failed", {
+        subject,
+        bodyPreview,
+      })
       return NextResponse.json({
         ok: true,
         created: false,
@@ -111,6 +116,7 @@ export async function POST(request: NextRequest) {
     }
 
     const show = row as DbRow
+    console.info("Inbound: show created", { id: show.id, show: show.show, date: show.date })
     return NextResponse.json({
       ok: true,
       created: true,

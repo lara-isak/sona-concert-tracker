@@ -26,6 +26,13 @@ function parseDate(str: string): string | null {
     if (y && m && d) return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`
   }
 
+  // DD.MM.YYYY (Eventim / EU)
+  const dot = /(\d{1,2})\.(\d{1,2})\.(\d{4})/.exec(s)
+  if (dot) {
+    const [, d, m, y] = dot
+    if (d && m && y) return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`
+  }
+
   // DD/MM/YYYY or MM/DD/YYYY (prefer DD/MM when day > 12)
   const slash = /(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s)
   if (slash) {
@@ -68,39 +75,49 @@ function parseDate(str: string): string | null {
   return null
 }
 
+function isReasonableEventYear(parsedDate: string): boolean {
+  const y = parseInt(parsedDate.slice(0, 4), 10)
+  const currentYear = new Date().getFullYear()
+  return y >= currentYear - 1 && y <= currentYear + 2
+}
+
 /** Find first date in text that looks like an event date (year >= current - 1) */
 function extractDate(text: string): string | null {
-  const currentYear = new Date().getFullYear()
 
-  // Label: value line (e.g. "Date: March 15, 2025")
+  // EVENTIM/order emails: prefer "Date: Wed, 11.03.2026" (event) over "Order date: 18.02.2026" (order)
+  // Match line that starts with "Date:" or "Datum:" (event date), not "Order date"
+  const eventDateLabel = text.match(/(?:^|\n)\s*(?:Date|Datum)\s*:\s*([^\n]+)/im)
+  if (eventDateLabel && eventDateLabel[1]) {
+    const parsed = parseDate(eventDateLabel[1])
+    if (parsed && isReasonableEventYear(parsed)) return parsed
+  }
+
+  // Other date labels (when, event date, show date, etc.)
   const labelMatch = text.match(
-    /(?:date|when|event date|show date|concert date)[\s:]+([^\n]+)/i
+    /(?:when|event date|show date|concert date|veranstaltungsdatum)[\s:]+([^\n]+)/i
   )
   if (labelMatch && labelMatch[1]) {
     const parsed = parseDate(labelMatch[1])
-    if (parsed) {
-      const y = parseInt(parsed.slice(0, 4), 10)
-      if (y >= currentYear - 1 && y <= currentYear + 2) return parsed
-    }
+    if (parsed && isReasonableEventYear(parsed)) return parsed
   }
 
-  // Standalone date patterns
+  // Standalone date patterns (DD.MM.YYYY first for Eventim)
+  const dotMatch = text.match(/\d{1,2}\.\d{1,2}\.\d{4}/)
+  if (dotMatch) {
+    const parsed = parseDate(dotMatch[0])
+    if (parsed && isReasonableEventYear(parsed)) return parsed
+  }
+
   const isoMatch = text.match(/\d{4}-\d{2}-\d{2}/)
   if (isoMatch) {
     const parsed = parseDate(isoMatch[0])
-    if (parsed) {
-      const y = parseInt(parsed.slice(0, 4), 10)
-      if (y >= currentYear - 1 && y <= currentYear + 2) return parsed
-    }
+    if (parsed && isReasonableEventYear(parsed)) return parsed
   }
 
   const slashMatch = text.match(/\d{1,2}\/\d{1,2}\/\d{4}/)
   if (slashMatch) {
     const parsed = parseDate(slashMatch[0])
-    if (parsed) {
-      const y = parseInt(parsed.slice(0, 4), 10)
-      if (y >= currentYear - 1 && y <= currentYear + 2) return parsed
-    }
+    if (parsed && isReasonableEventYear(parsed)) return parsed
   }
 
   const monthMatch = text.match(
@@ -108,17 +125,13 @@ function extractDate(text: string): string | null {
   )
   if (monthMatch) {
     const parsed = parseDate(monthMatch[0])
-    if (parsed) {
-      const y = parseInt(parsed.slice(0, 4), 10)
-      if (y >= currentYear - 1 && y <= currentYear + 2) return parsed
-    }
+    if (parsed && isReasonableEventYear(parsed)) return parsed
   }
 
   return null
 }
 
 function extractLabel(text: string, labels: string[]): string | null {
-  const lower = text.toLowerCase()
   for (const label of labels) {
     const re = new RegExp(`${label.replace(/\s+/g, "\\s+")}[\\s:]+([^\\n<]+)`, "i")
     const m = re.exec(text)
@@ -130,6 +143,28 @@ function extractLabel(text: string, labels: string[]): string | null {
   return null
 }
 
+/** Extract show name from EVENTIM subject: "Your EVENTIM order: Artist - order number 123" */
+function extractEventimShowFromSubject(subject: string): string | null {
+  const m = subject.match(/\bEVENTIM\s+order\s*:\s*(.+?)\s*-\s*order\s+number\s+\d+/i)
+  return m ? m[1].trim().slice(0, 200) : null
+}
+
+/** EVENTIM body line: "Artist, City, DD.MM.YYYY" (e.g. Psychedelic Porn Crumpets, Berlin, 11.03.2026) */
+function extractEventimArtistCityDate(text: string): {
+  show: string
+  city: string
+  date: string | null
+} | null {
+  const m = text.match(
+    /^([^,\n]+),\s*([^,\n]+),\s*(\d{1,2}\.\d{1,2}\.\d{4})\s*$/m
+  )
+  if (!m || !m[1] || !m[2] || !m[3]) return null
+  const [, show, city, dateStr] = m
+  const parsed = parseDate(dateStr)
+  if (!parsed || !isReasonableEventYear(parsed)) return null
+  return { show: show.trim().slice(0, 200), city: city.trim(), date: parsed }
+}
+
 /**
  * Parse email subject + body (plain text or HTML) and return show/date/city/venue if possible.
  */
@@ -139,17 +174,50 @@ export function parseShowFromEmail(subject: string, body: string): ParsedShow | 
 
   const date = extractDate(combined)
   const venue =
-    extractLabel(combined, ["venue", "location", "where", "place", "at venue"]) ||
-    extractLabel(combined, ["theatre", "theater", "arena", "hall"])
-  const city = extractLabel(combined, ["city", "location"])
+    extractLabel(combined, [
+      "venue",
+      "location",
+      "where",
+      "place",
+      "at venue",
+      "ort",
+      "veranstaltungsort",
+      "theatre",
+      "theater",
+      "arena",
+      "hall",
+    ])
+  const city =
+    extractLabel(combined, ["city", "stadt", "location"]) ||
+    extractLabel(combined, ["ort"])
+
+  // EVENTIM: subject "Your EVENTIM order: Artist - order number N" or body line "Artist, City, DD.MM.YYYY"
+  const eventimFromSubject = extractEventimShowFromSubject(subject)
+  const eventimFromBody = extractEventimArtistCityDate(text)
   const show =
-    extractLabel(combined, ["event", "concert", "show", "performance", "artist", "act"]) ||
+    eventimFromSubject ||
+    (eventimFromBody ? eventimFromBody.show : null) ||
+    extractLabel(combined, [
+      "event",
+      "veranstaltung",
+      "concert",
+      "konzert",
+      "show",
+      "performance",
+      "artist",
+      "act",
+      "event name",
+      "eventtitel",
+    ]) ||
     subject.trim().slice(0, 200)
 
   // Require at least show name and date; city/venue we can default
   if (!show || !date) return null
 
-  const cityFinal = city || "Unknown"
+  const cityFinal =
+    city ||
+    (eventimFromBody ? eventimFromBody.city : null) ||
+    "Unknown"
   const venueFinal = venue || "Unknown"
 
   return {
