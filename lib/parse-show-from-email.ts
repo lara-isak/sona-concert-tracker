@@ -14,6 +14,15 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
 }
 
+/** Title-case city name: HAMBURG -> Hamburg, new york -> New York */
+function capitalizeCity(city: string): string {
+  return city
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ")
+}
+
 /** Try to parse a date string into YYYY-MM-DD */
 function parseDate(str: string): string | null {
   if (!str || str.length > 60) return null
@@ -165,20 +174,30 @@ function extractEventimArtistCityDate(text: string): {
   return { show: show.trim().slice(0, 200), city: city.trim(), date: parsed }
 }
 
-/** From "VenueName, Street, PostalCode City" return just venue name (first segment); optionally extract city from last segment. */
+/** Extract city from "PostalCode City" in venue text (e.g. "10999 Berlin" -> "Berlin"). */
+function extractCityFromVenueLine(venueLine: string): string | null {
+  // Match 4–5 digit area/postal code followed by city name (one or two words, letters)
+  const m = venueLine.match(/\d{4,5}\s+([A-Za-z\u00C0-\u024F\-']+(?:\s+[A-Za-z\u00C0-\u024F\-']+)?)/)
+  if (!m || !m[1]) return null
+  const city = m[1].trim()
+  return city.length >= 2 && city.length <= 50 ? city : null
+}
+
+/** From "VenueName, Street, PostalCode City" return just venue name (first segment); optionally extract city from last segment or postal+city pattern. */
 function parseVenueLine(venueLine: string): { venueName: string; cityFromVenue: string | null } {
   const trimmed = venueLine.trim()
   if (!trimmed) return { venueName: "Unknown", cityFromVenue: null }
   const parts = trimmed.split(",").map((p) => p.trim()).filter(Boolean)
   const venueName = parts[0] ?? trimmed
-  // Last part might be "10999 Berlin" -> city "Berlin"
-  const last = parts[parts.length - 1]
+  // City = text after postal code (e.g. "10999 Berlin" -> "Berlin"); search whole line so it works even if comma-split is wrong
   const cityFromVenue =
-    last && parts.length > 1 && /^\d{4,5}\s+.+$/.test(last)
-      ? last.replace(/^\d{4,5}\s+/, "").trim()
-      : parts.length > 1
-        ? last ?? null
-        : null
+    extractCityFromVenueLine(trimmed) ??
+    (() => {
+      const last = parts[parts.length - 1]
+      if (last && parts.length > 1 && /^\d{4,5}\s+.+$/.test(last))
+        return last.replace(/^\d{4,5}\s+/, "").trim()
+      return parts.length > 1 ? (last ?? null) : null
+    })()
   return {
     venueName: venueName.replace(/\s+/g, "").toUpperCase() === "SO36" ? "SO36" : venueName,
     cityFromVenue: cityFromVenue && cityFromVenue.length <= 50 ? cityFromVenue : null,
@@ -232,7 +251,7 @@ export function parseShowFromEmail(subject: string, body: string): ParsedShow | 
   const cityFromLabel =
     extractLabel(combined, ["city", "stadt", "location"]) ||
     extractLabel(combined, ["ort"])
-  // Prefer EVENTIM "Artist, City, Date" city, then city from venue line; sanitize label value (reject sentences, take last city-like word if needed).
+  // City: prefer EVENTIM "Artist, City, Date", then city from Venue line (data after postal code, e.g. "10999 Berlin" -> "Berlin"); never use sentence-like label.
   const cityFinal =
     (eventimFromBody ? eventimFromBody.city : null) ||
     cityFromVenue ||
@@ -262,7 +281,7 @@ export function parseShowFromEmail(subject: string, body: string): ParsedShow | 
   return {
     show: show.trim(),
     date,
-    city: cityFinal,
+    city: capitalizeCity(cityFinal),
     venue: venueFinal,
   }
 }
