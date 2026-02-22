@@ -172,28 +172,43 @@ export function parseShowFromEmail(subject: string, body: string): ParsedShow | 
   const text = body.includes("<") ? stripHtml(body) : body
   const combined = `${subject}\n${text}`
 
-  const date = extractDate(combined)
-  const venue =
-    extractLabel(combined, [
-      "venue",
-      "location",
-      "where",
-      "place",
-      "at venue",
-      "ort",
-      "veranstaltungsort",
-      "theatre",
-      "theater",
-      "arena",
-      "hall",
-    ])
-  const city =
-    extractLabel(combined, ["city", "stadt", "location"]) ||
-    extractLabel(combined, ["ort"])
-
-  // EVENTIM: subject "Your EVENTIM order: Artist - order number N" or body line "Artist, City, DD.MM.YYYY"
+  // EVENTIM: parse early so we can prefer event date/city from "Artist, City, DD.MM.YYYY" line
   const eventimFromSubject = extractEventimShowFromSubject(subject)
   const eventimFromBody = extractEventimArtistCityDate(text)
+
+  const date =
+    (eventimFromBody ? eventimFromBody.date : null) || extractDate(combined)
+  const venueRaw = extractLabel(combined, [
+    "venue",
+    "location",
+    "where",
+    "place",
+    "at venue",
+    "ort",
+    "veranstaltungsort",
+    "theatre",
+    "theater",
+    "arena",
+    "hall",
+  ])
+  // EVENTIM venue line can run into next line in HTML (e.g. "Venue: SO 36... Promoter: ..."); trim at "Promoter:"
+  const venueFinal =
+    (venueRaw && venueRaw.split(/\s+Promoter\s*:/i)[0].trim()) || "Unknown"
+
+  const cityFromLabel =
+    extractLabel(combined, ["city", "stadt", "location"]) ||
+    extractLabel(combined, ["ort"])
+  // Prefer EVENTIM "Artist, City, Date" city; reject label value if it looks like footer text (long, contains ?)
+  const cityFinal =
+    (eventimFromBody ? eventimFromBody.city : null) ||
+    (cityFromLabel &&
+    cityFromLabel.length <= 80 &&
+    !cityFromLabel.includes("?") &&
+    !cityFromLabel.includes("http")
+      ? cityFromLabel
+      : null) ||
+    "Unknown"
+
   const show =
     eventimFromSubject ||
     (eventimFromBody ? eventimFromBody.show : null) ||
@@ -213,12 +228,6 @@ export function parseShowFromEmail(subject: string, body: string): ParsedShow | 
 
   // Require at least show name and date; city/venue we can default
   if (!show || !date) return null
-
-  const cityFinal =
-    city ||
-    (eventimFromBody ? eventimFromBody.city : null) ||
-    "Unknown"
-  const venueFinal = venue || "Unknown"
 
   return {
     show: show.trim(),
