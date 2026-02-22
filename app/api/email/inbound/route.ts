@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       venue: parsed.venue,
       ticket: "YES",
       ticket_vendor: isEventim ? "Eventim" : "",
-      ticket_location: "",
+      ticket_location: "In App",
       attendance: attendance as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
       note: null,
       qr_code_url: null,
