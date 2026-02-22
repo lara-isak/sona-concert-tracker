@@ -99,7 +99,6 @@ export async function POST(request: NextRequest) {
       ticket_location: "In App",
       attendance: attendance as "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED",
       note: null,
-      qr_code_url: null,
     }
 
     const { data: row, error: insertError } = await supabase

@@ -13,7 +13,6 @@ export type Database = {
           ticket_location: string
           attendance: "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED"
           note: string | null
-          qr_code_url: string | null
           created_at: string
           updated_at: string
         }
@@ -28,7 +27,6 @@ export type Database = {
           ticket_location: string
           attendance: "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED"
           note?: string | null
-          qr_code_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -43,7 +41,6 @@ export type Database = {
           ticket_location?: string
           attendance?: "YES" | "NO" | "NOT YET" | "CANCELLED" | "POSTPONED"
           note?: string | null
-          qr_code_url?: string | null
           updated_at?: string
         }
       }

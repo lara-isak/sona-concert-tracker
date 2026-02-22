@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Search, MapPin, Ticket, FileText, Plus, Upload, X, Edit, QrCode } from "lucide-react"
+import { Search, MapPin, Ticket, FileText, Plus, Upload, X, Edit } from "lucide-react"
 import { parseGoogleSheetsCSV, getDayOfWeek, type Show } from "@/lib/shows"
 import { fetchShows, createShow, importShows, updateShow } from "@/lib/shows-api"
 
@@ -817,29 +817,6 @@ export default function ShowTracker() {
                       )}
                     </div>
                     </div>
-
-                  {show.qrCodeUrl && (
-                    <div className="mt-3 pt-3 border-t border-border/30">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className="border-neon-cyan/50 text-neon-cyan bg-neon-cyan/10 font-mono text-xs"
-                          >
-                            <QrCode className="w-3 h-3 mr-1" />
-                            TICKET QR CODE
-                          </Badge>
-                        </div>
-                        <div className="flex justify-center md:justify-start">
-                          <img
-                            src={show.qrCodeUrl}
-                            alt={`QR code for ${show.show}`}
-                            className="w-32 h-32 md:w-40 md:h-40 border border-neon-cyan/30 rounded-md bg-background/50 p-2 shadow-[0_0_15px_rgba(0,255,255,0.2)]"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   {show.note && (
                     <div className="mt-3 pt-3 border-t border-border/30">
