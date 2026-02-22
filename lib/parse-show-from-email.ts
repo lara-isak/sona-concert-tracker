@@ -23,6 +23,27 @@ function capitalizeCity(city: string): string {
     .join(" ")
 }
 
+/** Never return a sentence as city: if it looks like one, take last city-like word or Unknown. */
+function ensureCityNotSentence(value: string): string {
+  const trimmed = value.trim()
+  const parts = trimmed.split(/\s+/)
+  const looksLikeSentence =
+    parts.length > 4 ||
+    trimmed.length > 50 ||
+    /\b(you|can|so that|at any|when logged|please|click|access them|any time)\b/i.test(trimmed)
+  if (!looksLikeSentence) return trimmed
+  const words = parts.filter((w) => /^[a-zA-Z\u00C0-\u024F\-']{2,40}$/.test(w))
+  return words.length > 0 ? words[words.length - 1]! : "Unknown"
+}
+
+/** EVENTIM/order emails: get "Venue: ..." line only (avoid matching earlier "location" that can be sentence garbage). */
+function extractVenueLineStrict(text: string): string | null {
+  const m = text.match(/\bVenue\s*:\s*([^\n<]+)/i)
+  if (!m || !m[1]) return null
+  const value = m[1].trim().replace(/\s+/g, " ").slice(0, 300)
+  return value.length > 0 ? value : null
+}
+
 /** Try to parse a date string into YYYY-MM-DD */
 function parseDate(str: string): string | null {
   if (!str || str.length > 60) return null
@@ -183,13 +204,13 @@ function extractCityFromVenueLine(venueLine: string): string | null {
   return city.length >= 2 && city.length <= 50 ? city : null
 }
 
-/** From "VenueName, Street, PostalCode City" return just venue name (first segment); optionally extract city from last segment or postal+city pattern. */
+/** From one Venue sentence: first part = venue name (e.g. SO36), last part = city (e.g. Berlin from "10999 Berlin"). */
 function parseVenueLine(venueLine: string): { venueName: string; cityFromVenue: string | null } {
   const trimmed = venueLine.trim()
   if (!trimmed) return { venueName: "Unknown", cityFromVenue: null }
   const parts = trimmed.split(",").map((p) => p.trim()).filter(Boolean)
   const venueName = parts[0] ?? trimmed
-  // City = text after postal code (e.g. "10999 Berlin" -> "Berlin"); search whole line so it works even if comma-split is wrong
+  // City = last part of sentence (e.g. "10999 Berlin" -> "Berlin"); match postal+city pattern in whole line
   const cityFromVenue =
     extractCityFromVenueLine(trimmed) ??
     (() => {
@@ -230,33 +251,38 @@ export function parseShowFromEmail(subject: string, body: string): ParsedShow | 
 
   const date =
     (eventimFromBody ? eventimFromBody.date : null) || extractDate(combined)
-  const venueRaw = extractLabel(combined, [
-    "venue",
-    "location",
-    "where",
-    "place",
-    "at venue",
-    "ort",
-    "veranstaltungsort",
-    "theatre",
-    "theater",
-    "arena",
-    "hall",
-  ])
-  // EVENTIM venue line can run into next line in HTML; trim at "Promoter:". Then use only venue name (first segment), e.g. "SO 36" not full address.
+  // Prefer strict "Venue:" line first (EVENTIM) so we don't use an earlier "location" match that can be sentence garbage
+  const venueLineStrict = extractVenueLineStrict(combined)
+  const venueRaw =
+    venueLineStrict ??
+    extractLabel(combined, [
+      "venue",
+      "location",
+      "where",
+      "place",
+      "at venue",
+      "ort",
+      "veranstaltungsort",
+      "theatre",
+      "theater",
+      "arena",
+      "hall",
+    ])
+  // Trim at "Promoter:" when present. Both venue and city come from this same Venue line: first part = venue (e.g. SO36), last part = city (e.g. Berlin).
   const venueLine =
     venueRaw && venueRaw.split(/\s+Promoter\s*:/i)[0].trim()
   const { venueName: venueFinal, cityFromVenue } = parseVenueLine(venueLine ?? "")
 
+  // City: from the same Venue sentence (last part, e.g. "10999 Berlin" -> "Berlin"). Only use other sources when there is no Venue line.
   const cityFromLabel =
     extractLabel(combined, ["city", "stadt", "location"]) ||
     extractLabel(combined, ["ort"])
-  // City: prefer EVENTIM "Artist, City, Date", then city from Venue line (data after postal code, e.g. "10999 Berlin" -> "Berlin"); never use sentence-like label.
-  const cityFinal =
-    (eventimFromBody ? eventimFromBody.city : null) ||
-    cityFromVenue ||
-    (cityFromLabel ? sanitizeCityFromLabel(cityFromLabel) : null) ||
+  const cityFinal = ensureCityNotSentence(
+    cityFromVenue ??
+    (eventimFromBody ? eventimFromBody.city : null) ??
+    (cityFromLabel ? sanitizeCityFromLabel(cityFromLabel) : null) ??
     "Unknown"
+  )
 
   const show =
     eventimFromSubject ||
