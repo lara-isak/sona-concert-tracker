@@ -185,6 +185,19 @@ function parseVenueLine(venueLine: string): { venueName: string; cityFromVenue: 
   }
 }
 
+/** Reject sentence-like label value; use as-is if city-like, else take last word that looks like a city name. */
+function sanitizeCityFromLabel(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > 200) return null
+  const looksLikeSentence = /[?*]|https?:\/\/|\b(you|can|so that|at any|when logged|please|click)\b/i.test(trimmed)
+  // If short and city-like (no sentence), use as-is
+  if (!looksLikeSentence && trimmed.length <= 50 && /^[a-zA-Z\u00C0-\u024F\s\-'.]+$/.test(trimmed) && trimmed.split(/\s+/).length <= 3)
+    return trimmed
+  // Otherwise take last token that looks like a city (letters only, 2–40 chars), e.g. "... Berlin" -> "Berlin"
+  const words = trimmed.split(/\s+/).filter((w) => /^[a-zA-Z\u00C0-\u024F\-']{2,40}$/.test(w))
+  return words.length > 0 ? words[words.length - 1]! : null
+}
+
 /**
  * Parse email subject + body (plain text or HTML) and return show/date/city/venue if possible.
  */
@@ -219,16 +232,11 @@ export function parseShowFromEmail(subject: string, body: string): ParsedShow | 
   const cityFromLabel =
     extractLabel(combined, ["city", "stadt", "location"]) ||
     extractLabel(combined, ["ort"])
-  // Prefer EVENTIM "Artist, City, Date" city, then city from venue line (e.g. "Berlin" from "..., 10999 Berlin"); reject footer-looking label.
+  // Prefer EVENTIM "Artist, City, Date" city, then city from venue line; sanitize label value (reject sentences, take last city-like word if needed).
   const cityFinal =
     (eventimFromBody ? eventimFromBody.city : null) ||
     cityFromVenue ||
-    (cityFromLabel &&
-    cityFromLabel.length <= 80 &&
-    !cityFromLabel.includes("?") &&
-    !cityFromLabel.includes("http")
-      ? cityFromLabel
-      : null) ||
+    (cityFromLabel ? sanitizeCityFromLabel(cityFromLabel) : null) ||
     "Unknown"
 
   const show =
